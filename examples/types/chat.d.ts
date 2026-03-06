@@ -24,6 +24,23 @@ import {
  * Provides methods for managing chat conversations
  */
 export namespace Chat {
+    interface SendMessageAdvancedParams {
+        message: string;
+        chatId?: string;
+        chatHistory?: Array<[string, string]>;
+        workspacePath?: string;
+        functionType?: string;
+        promptFunctionType?: string;
+        enableThinking?: boolean;
+        thinkingGuidance?: boolean;
+        enableMemoryQuery?: boolean;
+        maxTokens: number;
+        tokenUsageThreshold: number;
+        customSystemPromptTemplate?: string;
+        isSubTask?: boolean;
+        stream?: boolean;
+    }
+
     /**
      * Start the chat service (floating window)
      * @returns Promise resolving to service start result
@@ -96,6 +113,13 @@ export namespace Chat {
      * @returns Promise resolving to the message send result
      */
     function sendMessage(message: string, chatId?: string, roleCardId?: string, senderName?: string): Promise<MessageSendResultData>;
+
+    /**
+     * Send a message to AI with advanced controls.
+     * @param params - Advanced send parameters
+     * @returns Promise resolving to the message send result
+     */
+    function sendMessageAdvanced(params: SendMessageAdvancedParams): Promise<MessageSendResultData>;
 
     /**
      * List all character cards

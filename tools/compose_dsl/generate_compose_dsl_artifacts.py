@@ -278,7 +278,7 @@ def map_param_to_ts(component: str, param: Param) -> Optional[Tuple[str, str, bo
         return ("progress", "number", False)
     if name == "tint" or name == "color" or name == "contentColor":
         ts_prop = "tint" if component == "Icon" and name == "tint" else name
-        return (ts_prop, "string", False)
+        return (ts_prop, "ComposeColor", False)
 
     if "Arrangement." in type_name:
         ts_prop = "verticalArrangement" if "Vertical" in type_name else "horizontalArrangement"
@@ -953,19 +953,32 @@ def build_component_renderer_function(spec: ComponentSpec, params: Sequence[Para
             ) {
                 val props = node.props
                 val containerColor = props.colorOrNull("containerColor")
+                val containerAlpha = props.floatOrNull("containerAlpha")
+                val alpha = props.floatOrNull("alpha")
                 val contentColor = props.colorOrNull("contentColor")
+                val contentAlpha = props.floatOrNull("contentAlpha")
                 val spacing = props.dp("spacing")
+                val finalContainerColor = containerColor?.let { color ->
+                    when {
+                        containerAlpha != null -> color.copy(alpha = containerAlpha)
+                        alpha != null -> color.copy(alpha = alpha)
+                        else -> color
+                    }
+                }
+                val finalContentColor = contentColor?.let { color ->
+                    if (contentAlpha != null) color.copy(alpha = contentAlpha) else color
+                }
                 val cardColors =
                     when {
-                        containerColor != null && contentColor != null ->
+                        finalContainerColor != null && finalContentColor != null ->
                             CardDefaults.cardColors(
-                                containerColor = containerColor,
-                                contentColor = contentColor
+                                containerColor = finalContainerColor,
+                                contentColor = finalContentColor
                             )
-                        containerColor != null ->
-                            CardDefaults.cardColors(containerColor = containerColor)
-                        contentColor != null ->
-                            CardDefaults.cardColors(contentColor = contentColor)
+                        finalContainerColor != null ->
+                            CardDefaults.cardColors(containerColor = finalContainerColor)
+                        finalContentColor != null ->
+                            CardDefaults.cardColors(contentColor = finalContentColor)
                         else -> CardDefaults.cardColors()
                     }
                 Card(
@@ -1285,18 +1298,26 @@ def build_generated_renderer_functions(
 def build_ts_generated_file(
     component_params: Dict[str, List[Param]],
     components: Sequence[ComponentSpec],
-    output_path: Path
+    output_path: Path,
+    extra_ts_components: Optional[Dict[str, List[Tuple[str, str, bool]]]] = None,
+    extra_ts_imports: Optional[List[str]] = None
 ) -> None:
+    extra_ts_components = extra_ts_components or {}
+    extra_ts_imports = extra_ts_imports or []
+
     lines: List[str] = []
     lines.append('import type {')
     lines.append("  ComposeAlignment,")
     lines.append("  ComposeArrangement,")
     lines.append("  ComposeBorder,")
+    lines.append("  ComposeColor,")
     lines.append("  ComposeCommonProps,")
     lines.append("  ComposeNodeFactory,")
     lines.append("  ComposeShape,")
     lines.append("  ComposeTextFieldStyle,")
-    lines.append("  ComposeTextStyle")
+    lines.append("  ComposeTextStyle,")
+    for import_name in extra_ts_imports:
+        lines.append(f"  {import_name},")
     lines.append('} from \"./compose-dsl\";')
     lines.append("")
     lines.append("/**")
@@ -1330,15 +1351,15 @@ def build_ts_generated_file(
             emitted.setdefault("icon", ("string", False))
 
         if component == "Card":
-            emitted.setdefault("containerColor", ("string", False))
-            emitted.setdefault("contentColor", ("string", False))
+            emitted.setdefault("containerColor", ("ComposeColor", False))
+            emitted.setdefault("contentColor", ("ComposeColor", False))
             emitted.setdefault("shape", ("ComposeShape", False))
             emitted.setdefault("border", ("ComposeBorder", False))
             emitted.setdefault("elevation", ("number", False))
 
         if component == "Surface":
-            emitted.setdefault("containerColor", ("string", False))
-            emitted.setdefault("contentColor", ("string", False))
+            emitted.setdefault("containerColor", ("ComposeColor", False))
+            emitted.setdefault("contentColor", ("ComposeColor", False))
             emitted.setdefault("shape", ("ComposeShape", False))
             emitted.setdefault("alpha", ("number", False))
 
@@ -1363,8 +1384,20 @@ def build_ts_generated_file(
         lines.append("}")
         lines.append("")
 
+    if extra_ts_components:
+        for component, props in extra_ts_components.items():
+            lines.append(f"export interface ComposeGenerated{component}Props extends ComposeCommonProps {{")
+            for prop_name, ts_type, required in props:
+                opt = "" if required else "?"
+                lines.append(f"  {prop_name}{opt}: {ts_type};")
+            lines.append("}")
+            lines.append("")
+
     lines.append("export interface ComposeMaterial3GeneratedUiFactoryRegistry {")
     for component in [c.dsl_name for c in components]:
+        iface = f"ComposeGenerated{component}Props"
+        lines.append(f"  {component}: ComposeNodeFactory<{iface}>;")
+    for component in extra_ts_components.keys():
         iface = f"ComposeGenerated{component}Props"
         lines.append(f"  {component}: ComposeNodeFactory<{iface}>;")
     lines.append("}")
@@ -1460,7 +1493,18 @@ def main() -> None:
         / "ToolPkgComposeDslGeneratedRenderers.kt"
     )
 
-    build_ts_generated_file(all_params, all_components, ts_output)
+    extra_ts_components = {
+        "Canvas": [
+            ("commands", "ComposeCanvasCommand[]", False)
+        ]
+    }
+    build_ts_generated_file(
+        all_params,
+        all_components,
+        ts_output,
+        extra_ts_components=extra_ts_components,
+        extra_ts_imports=["ComposeCanvasCommand"]
+    )
     build_kotlin_registry_file(all_components, kt_output)
     build_kotlin_renderers_file(all_params, all_components, kt_renderers_output)
 

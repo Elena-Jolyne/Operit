@@ -89,9 +89,11 @@ if (toolCall("default", "file_exists", { path: "/sdcard/my_file.txt" })) {
 - `Java.implement(interfaceNameOrNames, impl)`：创建 Java 接口实现标记（支持 `string`、`string[]`、`Java.xxx` 类代理）
 - `Java.implement(impl)`：省略接口名，交给目标参数类型推断（适合入参本身就是 interface）
 - `Java.proxy(...)`：`implement(...)` 的别名
+- **语法糖**：当 Java/Kotlin 方法参数是接口类型时，可直接传 JS 函数/对象，桥接会自动推断接口并创建代理（无需显式 `Java.implement`）
 - `Java.releaseJs(markerOrId)`：释放 `implement` 注册的 JS 回调对象
 - `Java.classExists(className)`：判断类是否存在
 - `Java.callStatic(className, methodName, ...args)`：直接调用静态方法
+- `Java.callSuspend(className, methodName, ...args, callback?)`：调用 Kotlin suspend 方法（回调或 Promise）
 - `Java.newInstance(className, ...args)`：直接创建实例
 - `Java.release(instanceOrHandle)`：释放单个实例句柄
 - `Java.releaseAll()`：释放当前引擎下全部实例句柄（返回释放数量）
@@ -108,6 +110,7 @@ if (toolCall("default", "file_exists", { path: "/sdcard/my_file.txt" })) {
 - `new Cls(...args)`：语法糖，等价于 `Cls.newInstance(...)`
 - `Cls(...args)`：语法糖，等价于 `Cls.newInstance(...)`
 - `Cls.callStatic(methodName, ...args)`：调用静态方法
+- `Cls.callSuspend(methodName, ...args, callback?)`：调用 suspend 静态方法（回调或 Promise）
 - `Cls.getStatic(fieldName)`：读取静态字段/属性
 - `Cls.setStatic(fieldName, value)`：写入静态字段/属性
 - `Cls.someStaticMethod(...)`：动态静态方法调用（语法糖）
@@ -116,6 +119,7 @@ if (toolCall("default", "file_exists", { path: "/sdcard/my_file.txt" })) {
 #### 实例代理（`newInstance` 返回值）
 
 - `obj.call(methodName, ...args)`：调用实例方法
+- `obj.callSuspend(methodName, ...args, callback?)`：调用 suspend 实例方法（回调或 Promise）
 - `obj.get(fieldName)`：读取字段/属性
 - `obj.set(fieldName, value)`：写入字段/属性
 - `obj.release()`：释放该实例句柄
@@ -134,7 +138,7 @@ if (toolCall("default", "file_exists", { path: "/sdcard/my_file.txt" })) {
 - `Java.implement(Java.java.lang.Runnable, () => { ... })`：等价语法糖（类代理写法）
 - `Java.implement("com.xxx.Listener", { onStart(){}, onStop(){} })`：对象式实现（多方法）
 - `Java.implement(["a.InterfaceA", Java.b.InterfaceB], impl)`：一次声明多接口（目标参数为 `Object` 时尤其有用）
-- JS 里直接传函数参数给 Java（例如 `new Thread(() => {})`）也支持，会自动桥接为接口回调对象
+- **语法糖**：JS 里直接传函数/对象给 Java（例如 `new Thread(() => {})` 或 `stream.collect({ emit(v){...} })`）也支持，桥接会自动推断接口
 - 回调对象不再使用时请调用 `Java.releaseJs(markerOrId)` 释放，避免持有多余引用
 
 示例 1：`Runnable`
@@ -166,7 +170,9 @@ const listener = Java.implement("com.example.Listener", {
 - `NativeInterface.javaClassExists(className): boolean`
 - `NativeInterface.javaNewInstance(className, argsJson): string`
 - `NativeInterface.javaCallStatic(className, methodName, argsJson): string`
+- `NativeInterface.javaCallStaticSuspend(className, methodName, argsJson, callbackId): void`
 - `NativeInterface.javaCallInstance(instanceHandle, methodName, argsJson): string`
+- `NativeInterface.javaCallInstanceSuspend(instanceHandle, methodName, argsJson, callbackId): void`
 - `NativeInterface.javaGetStaticField(className, fieldName): string`
 - `NativeInterface.javaSetStaticField(className, fieldName, valueJson): string`
 - `NativeInterface.javaGetInstanceField(instanceHandle, fieldName): string`

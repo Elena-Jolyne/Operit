@@ -537,10 +537,12 @@ await Tools.UI.swipe(540, 1800, 540, 900);
     -   别名：`Java.use(...)` / `Java.importClass(...)`
 -   包链访问：`Java.java.lang.System.currentTimeMillis()`
 -   静态调用：`Java.callStatic(className, methodName, ...args)`
+-   异步挂起调用：`Java.callSuspend(className, methodName, ...args, callback?)`
 -   构造实例：`Java.newInstance(className, ...args)` 或 `new Java.java.util.ArrayList()`
 -   接口实现：
     -   `Java.implement(interfaceNameOrNames, impl)`（支持字符串接口名或 `Java.xxx` 类代理）
     -   `Java.proxy(interfaceNameOrNames, impl)`（`implement` 别名）
+    -   **语法糖**：当 Java/Kotlin 方法参数为接口类型时，可直接传 JS 函数/对象，桥接会自动推断接口并创建代理（无需显式 `implement`）
 -   生命周期管理：
     -   `obj.release()` / `Java.release(instanceOrHandle)`
     -   `Java.releaseAll()`
@@ -603,6 +605,35 @@ console.log(parsed.data); // 42
 ```
 
 如果你在 TypeScript 中开发，建议先引用 `examples/types/index.d.ts`，即可获得 Java Bridge 的类型提示（含 `Java`、`Kotlin`、`NativeInterface`）。
+
+#### 3.4.7. 示例：suspend 调用（callback / Promise）
+
+`callSuspend` 用于调用 Kotlin `suspend` 方法。最后一个参数可选传入回调，不传则返回 `Promise`。
+
+```typescript
+const EnhancedAIService = Java.com.ai.assistance.operit.api.chat.EnhancedAIService;
+
+// callback 形式
+EnhancedAIService.callSuspend(
+    "getAIServiceForFunction",
+    ctx,
+    FunctionType.CHAT,
+    (err, service) => {
+        if (err) {
+            console.log("err=", err);
+            return;
+        }
+        console.log("service=", service);
+    }
+);
+
+// Promise 形式
+const service = await EnhancedAIService.callSuspend(
+    "getAIServiceForFunction",
+    ctx,
+    FunctionType.CHAT
+);
+```
 
 ## 4. 编写第一个脚本 (TypeScript)
 

@@ -392,7 +392,17 @@ internal fun buildExecutionScript(
                 }
 
                 setStage('invoke_target_function');
-                var functionResult = targetFunction(params);
+                var previousModule = window.__operit_current_module;
+                var previousExports = window.__operit_current_module_exports;
+                window.__operit_current_module = rootModule;
+                window.__operit_current_module_exports = rootExports;
+                var functionResult = null;
+                try {
+                    functionResult = targetFunction(params);
+                } finally {
+                    window.__operit_current_module = previousModule;
+                    window.__operit_current_module_exports = previousExports;
+                }
 
                 setStage('handle_function_result');
                 var handledAsync = false;
@@ -405,7 +415,41 @@ internal fun buildExecutionScript(
                 }
 
                 if (!handledAsync) {
-                    var serialized = JSON.stringify(functionResult);
+                    function normalizeComposeDslResult(value) {
+                        if (!value || typeof value !== 'object') {
+                            return value;
+                        }
+                        var composeDsl = value.composeDsl;
+                        if (!composeDsl || typeof composeDsl !== 'object') {
+                            return value;
+                        }
+                        if (!Object.prototype.hasOwnProperty.call(composeDsl, 'screen')) {
+                            return value;
+                        }
+                        var screenRef = composeDsl.screen;
+                        var resolved = '';
+                        if (typeof screenRef === 'function') {
+                            var marker = screenRef.__operit_toolpkg_module_path;
+                            if (typeof marker === 'string') {
+                                resolved = marker.trim().replace(/\\\\/g, '/');
+                            }
+                        } else if (screenRef && typeof screenRef === 'object' && typeof screenRef.default === 'function') {
+                            var defaultMarker = screenRef.default.__operit_toolpkg_module_path;
+                            if (typeof defaultMarker === 'string') {
+                                resolved = defaultMarker.trim().replace(/\\\\/g, '/');
+                            }
+                        } else if (typeof screenRef === 'string') {
+                            throw new Error("composeDsl.screen must be a compose_dsl screen function, not a string path");
+                        }
+                        if (!resolved) {
+                            throw new Error("composeDsl.screen is missing a toolpkg module path marker");
+                        }
+                        composeDsl.screen = resolved;
+                        return value;
+                    }
+
+                    var normalizedResult = normalizeComposeDslResult(functionResult);
+                    var serialized = JSON.stringify(normalizedResult);
                     emitResult(serialized);
                 }
             } catch (error) {

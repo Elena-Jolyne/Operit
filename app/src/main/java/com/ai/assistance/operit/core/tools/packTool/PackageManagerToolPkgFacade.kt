@@ -575,17 +575,17 @@ internal class PackageManagerToolPkgFacade(
                 )
 
             val timestampMs = System.currentTimeMillis()
-            val params = mutableMapOf<String, Any?>(
-                "event" to event,
-                "eventName" to event,
-                "eventPayload" to eventPayload,
-                "timestampMs" to timestampMs,
-                "functionName" to functionName,
-                "toolPkgId" to runtime.packageName,
-                "containerPackageName" to runtime.packageName,
-                "__operit_ui_package_name" to runtime.packageName,
-                "__operit_persistent_module_key" to "toolpkg_main:" + runtime.packageName
-            )
+        val params = mutableMapOf<String, Any?>(
+            "event" to event,
+            "eventName" to event,
+            "eventPayload" to eventPayload,
+            "timestampMs" to timestampMs,
+            "functionName" to functionName,
+            "toolPkgId" to runtime.packageName,
+            "containerPackageName" to runtime.packageName,
+            "__operit_ui_package_name" to runtime.packageName,
+            "__operit_persistent_module_key" to "toolpkg_main:" + runtime.packageName
+        )
             if (!normalizedPluginId.isNullOrBlank()) {
                 params["pluginId"] = normalizedPluginId
             }
@@ -593,7 +593,6 @@ internal class PackageManagerToolPkgFacade(
                 params["__operit_inline_function_name"] = functionName
                 params["__operit_inline_function_source"] = functionSource
             }
-
             val executionContextKey = resolveToolPkgExecutionContextKey(runtime.packageName, params)
             val executionEngine = packageManager.getToolPkgExecutionEngine(executionContextKey)
             executionEngine.executeScriptFunction(

@@ -2,11 +2,13 @@ import type {
   ComposeAlignment,
   ComposeArrangement,
   ComposeBorder,
+  ComposeColor,
   ComposeCommonProps,
   ComposeNodeFactory,
   ComposeShape,
   ComposeTextFieldStyle,
-  ComposeTextStyle
+  ComposeTextStyle,
+  ComposeCanvasCommand,
 } from "./compose-dsl";
 
 /**
@@ -46,7 +48,7 @@ export interface ComposeGeneratedLazyRowProps extends ComposeCommonProps {
 }
 
 export interface ComposeGeneratedTextProps extends ComposeCommonProps {
-  color?: string;
+  color?: ComposeColor;
   fontWeight?: string;
   maxLines?: number;
   softWrap?: boolean;
@@ -94,17 +96,17 @@ export interface ComposeGeneratedIconButtonProps extends ComposeCommonProps {
 
 export interface ComposeGeneratedCardProps extends ComposeCommonProps {
   border?: ComposeBorder;
-  containerColor?: string;
-  contentColor?: string;
+  containerColor?: ComposeColor;
+  contentColor?: ComposeColor;
   elevation?: number;
   shape?: ComposeShape;
 }
 
 export interface ComposeGeneratedSurfaceProps extends ComposeCommonProps {
   alpha?: number;
-  color?: string;
-  containerColor?: string;
-  contentColor?: string;
+  color?: ComposeColor;
+  containerColor?: ComposeColor;
+  contentColor?: ComposeColor;
   shadowElevation?: number;
   shape?: ComposeShape;
   tonalElevation?: number;
@@ -114,16 +116,16 @@ export interface ComposeGeneratedIconProps extends ComposeCommonProps {
   contentDescription?: string;
   name?: string;
   size?: number;
-  tint?: string;
+  tint?: ComposeColor;
 }
 
 export interface ComposeGeneratedLinearProgressIndicatorProps extends ComposeCommonProps {
-  color?: string;
+  color?: ComposeColor;
   progress?: number;
 }
 
 export interface ComposeGeneratedCircularProgressIndicatorProps extends ComposeCommonProps {
-  color?: string;
+  color?: ComposeColor;
   strokeWidth?: number;
 }
 
@@ -131,7 +133,7 @@ export interface ComposeGeneratedSnackbarHostProps extends ComposeCommonProps {
 }
 
 export interface ComposeGeneratedBadgeProps extends ComposeCommonProps {
-  contentColor?: string;
+  contentColor?: ComposeColor;
 }
 
 export interface ComposeGeneratedDismissibleDrawerSheetProps extends ComposeCommonProps {
@@ -139,7 +141,7 @@ export interface ComposeGeneratedDismissibleDrawerSheetProps extends ComposeComm
 }
 
 export interface ComposeGeneratedDividerProps extends ComposeCommonProps {
-  color?: string;
+  color?: ComposeColor;
   thickness?: number;
 }
 
@@ -152,7 +154,7 @@ export interface ComposeGeneratedElevatedCardProps extends ComposeCommonProps {
 }
 
 export interface ComposeGeneratedExtendedFloatingActionButtonProps extends ComposeCommonProps {
-  contentColor?: string;
+  contentColor?: ComposeColor;
   onClick: () => void | Promise<void>;
 }
 
@@ -174,12 +176,12 @@ export interface ComposeGeneratedFilledTonalIconButtonProps extends ComposeCommo
 }
 
 export interface ComposeGeneratedFloatingActionButtonProps extends ComposeCommonProps {
-  contentColor?: string;
+  contentColor?: ComposeColor;
   onClick: () => void | Promise<void>;
 }
 
 export interface ComposeGeneratedHorizontalDividerProps extends ComposeCommonProps {
-  color?: string;
+  color?: ComposeColor;
   thickness?: number;
 }
 
@@ -191,7 +193,7 @@ export interface ComposeGeneratedIconToggleButtonProps extends ComposeCommonProp
 }
 
 export interface ComposeGeneratedLargeFloatingActionButtonProps extends ComposeCommonProps {
-  contentColor?: string;
+  contentColor?: ComposeColor;
   onClick: () => void | Promise<void>;
 }
 
@@ -203,12 +205,12 @@ export interface ComposeGeneratedModalDrawerSheetProps extends ComposeCommonProp
 }
 
 export interface ComposeGeneratedNavigationBarProps extends ComposeCommonProps {
-  contentColor?: string;
+  contentColor?: ComposeColor;
   tonalElevation?: number;
 }
 
 export interface ComposeGeneratedNavigationRailProps extends ComposeCommonProps {
-  contentColor?: string;
+  contentColor?: ComposeColor;
 }
 
 export interface ComposeGeneratedOutlinedButtonProps extends ComposeCommonProps {
@@ -234,17 +236,17 @@ export interface ComposeGeneratedProvideTextStyleProps extends ComposeCommonProp
 }
 
 export interface ComposeGeneratedScaffoldProps extends ComposeCommonProps {
-  contentColor?: string;
+  contentColor?: ComposeColor;
 }
 
 export interface ComposeGeneratedSmallFloatingActionButtonProps extends ComposeCommonProps {
-  contentColor?: string;
+  contentColor?: ComposeColor;
   onClick: () => void | Promise<void>;
 }
 
 export interface ComposeGeneratedSnackbarProps extends ComposeCommonProps {
   actionOnNewLine?: boolean;
-  contentColor?: string;
+  contentColor?: ComposeColor;
 }
 
 export interface ComposeGeneratedTabProps extends ComposeCommonProps {
@@ -259,7 +261,7 @@ export interface ComposeGeneratedTextButtonProps extends ComposeCommonProps {
 }
 
 export interface ComposeGeneratedVerticalDividerProps extends ComposeCommonProps {
-  color?: string;
+  color?: ComposeColor;
   thickness?: number;
 }
 
@@ -284,6 +286,10 @@ export interface ComposeGeneratedImageProps extends ComposeCommonProps {
 }
 
 export interface ComposeGeneratedSelectionContainerProps extends ComposeCommonProps {
+}
+
+export interface ComposeGeneratedCanvasProps extends ComposeCommonProps {
+  commands?: ComposeCanvasCommand[];
 }
 
 export interface ComposeMaterial3GeneratedUiFactoryRegistry {
@@ -338,5 +344,6 @@ export interface ComposeMaterial3GeneratedUiFactoryRegistry {
   DisableSelection: ComposeNodeFactory<ComposeGeneratedDisableSelectionProps>;
   Image: ComposeNodeFactory<ComposeGeneratedImageProps>;
   SelectionContainer: ComposeNodeFactory<ComposeGeneratedSelectionContainerProps>;
+  Canvas: ComposeNodeFactory<ComposeGeneratedCanvasProps>;
 }
 

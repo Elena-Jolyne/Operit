@@ -97,6 +97,7 @@ export interface JavaBridgeInstance extends JavaBridgeHandle {
     readonly handle: string;
 
     call<T extends JavaBridgeValue = JavaBridgeValue>(methodName: string, ...args: JavaBridgeArg[]): T;
+    callSuspend(methodName: string, ...args: JavaBridgeArg[]): void;
     get<T extends JavaBridgeValue = JavaBridgeValue>(): T;
     get<T extends JavaBridgeValue = JavaBridgeValue>(fieldName: string): T;
     set<T extends JavaBridgeValue = JavaBridgeValue>(value: JavaBridgeArg): T;
@@ -123,6 +124,7 @@ export interface JavaBridgeClass {
     exists(): boolean;
     newInstance<T extends JavaBridgeInstance = JavaBridgeInstance>(...args: JavaBridgeArg[]): T;
     callStatic<T extends JavaBridgeValue = JavaBridgeValue>(methodName: string, ...args: JavaBridgeArg[]): T;
+    callSuspend(methodName: string, ...args: JavaBridgeArg[]): void | Promise<JavaBridgeValue>;
     getStatic<T extends JavaBridgeValue = JavaBridgeValue>(fieldName: string): T;
     setStatic<T extends JavaBridgeValue = JavaBridgeValue>(fieldName: string, value: JavaBridgeArg): T;
     toString(): string;
@@ -161,6 +163,7 @@ export interface JavaBridgeApi {
     releaseJs(objectOrId: JavaBridgeJsInterfaceMarker | string): boolean;
     classExists(className: string): boolean;
     callStatic<T extends JavaBridgeValue = JavaBridgeValue>(className: string, methodName: string, ...args: JavaBridgeArg[]): T;
+    callSuspend(className: string, methodName: string, ...args: JavaBridgeArg[]): void | Promise<JavaBridgeValue>;
     newInstance<T extends JavaBridgeInstance = JavaBridgeInstance>(className: string, ...args: JavaBridgeArg[]): T;
     release(instanceOrHandle: JavaBridgeInstance | JavaBridgeHandle | string): boolean;
     releaseAll(): number;

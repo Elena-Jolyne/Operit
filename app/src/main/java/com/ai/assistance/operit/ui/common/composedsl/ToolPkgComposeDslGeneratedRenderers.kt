@@ -199,10 +199,8 @@ internal fun renderLazyColumnNode(
     val props = node.props
     val spacing = props.dp("spacing")
     LazyColumn(
-        modifier = applyCommonModifier(Modifier, props),
-        horizontalAlignment = props.horizontalAlignment("horizontalAlignment"),
-        reverseLayout = props.bool("reverseLayout", false),
-        verticalArrangement = props.verticalArrangement("verticalArrangement", spacing),
+        modifier = applyCommonModifier(Modifier.fillMaxSize(), props),
+        verticalArrangement = Arrangement.spacedBy(spacing),
         contentPadding = PaddingValues(0.dp)
     ) {
         itemsIndexed(node.children) { index, child ->
@@ -467,19 +465,32 @@ internal fun renderCardNode(
 ) {
     val props = node.props
     val containerColor = props.colorOrNull("containerColor")
+    val containerAlpha = props.floatOrNull("containerAlpha")
+    val alpha = props.floatOrNull("alpha")
     val contentColor = props.colorOrNull("contentColor")
+    val contentAlpha = props.floatOrNull("contentAlpha")
     val spacing = props.dp("spacing")
+    val finalContainerColor = containerColor?.let { color ->
+        when {
+            containerAlpha != null -> color.copy(alpha = containerAlpha)
+            alpha != null -> color.copy(alpha = alpha)
+            else -> color
+        }
+    }
+    val finalContentColor = contentColor?.let { color ->
+        if (contentAlpha != null) color.copy(alpha = contentAlpha) else color
+    }
     val cardColors =
         when {
-            containerColor != null && contentColor != null ->
+            finalContainerColor != null && finalContentColor != null ->
                 CardDefaults.cardColors(
-                    containerColor = containerColor,
-                    contentColor = contentColor
+                    containerColor = finalContainerColor,
+                    contentColor = finalContentColor
                 )
-            containerColor != null ->
-                CardDefaults.cardColors(containerColor = containerColor)
-            contentColor != null ->
-                CardDefaults.cardColors(contentColor = contentColor)
+            finalContainerColor != null ->
+                CardDefaults.cardColors(containerColor = finalContainerColor)
+            finalContentColor != null ->
+                CardDefaults.cardColors(contentColor = finalContentColor)
             else -> CardDefaults.cardColors()
         }
     Card(

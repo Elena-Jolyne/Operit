@@ -105,6 +105,12 @@ internal fun buildComposeDslRuntimeWrappedScript(script: String): String {
                     Object.prototype.hasOwnProperty.call(__request, '__action_payload')
                         ? __request.__action_payload
                         : __request.payload;
+                var __noRender =
+                    __payload &&
+                    typeof __payload === 'object' &&
+                    (__payload.__no_render === true ||
+                        __payload.__noRender === true ||
+                        __payload.__local === true);
 
                 function __operit_send_intermediate_result(__value) {
                     if (
@@ -192,9 +198,11 @@ internal fun buildComposeDslRuntimeWrappedScript(script: String): String {
                 }
 
                 if (typeof __bundle.subscribeStateChange === 'function') {
-                    __unsubscribeStateChange = __bundle.subscribeStateChange(function() {
-                        __operit_schedule_intermediate_render();
-                    });
+                    if (!__noRender) {
+                        __unsubscribeStateChange = __bundle.subscribeStateChange(function() {
+                            __operit_schedule_intermediate_render();
+                        });
+                    }
                 }
 
                 var __maybePromise;
@@ -205,11 +213,16 @@ internal fun buildComposeDslRuntimeWrappedScript(script: String): String {
                     throw __actionError;
                 }
                 if (__maybePromise && typeof __maybePromise.then === 'function') {
-                    // For async actions, schedule a render checkpoint immediately.
-                    // Additional state updates during await phases are pushed by state-change listeners.
-                    __operit_schedule_intermediate_render();
+                    if (!__noRender) {
+                        // For async actions, schedule a render checkpoint immediately.
+                        // Additional state updates during await phases are pushed by state-change listeners.
+                        __operit_schedule_intermediate_render();
+                    }
                     return __maybePromise.then(function() {
                         __operit_finalize_action();
+                        if (__noRender) {
+                            return null;
+                        }
                         return __operit_build_compose_response(__bundle, __entry);
                     }, function(__actionError) {
                         __operit_finalize_action();
@@ -217,6 +230,9 @@ internal fun buildComposeDslRuntimeWrappedScript(script: String): String {
                     });
                 }
                 __operit_finalize_action();
+                if (__noRender) {
+                    return null;
+                }
                 return __operit_build_compose_response(__bundle, __entry);
             }
 

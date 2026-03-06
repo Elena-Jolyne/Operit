@@ -8,6 +8,7 @@ export type ComposeTextStyle =
   | "headlineMedium"
   | "titleLarge"
   | "titleMedium"
+  | "titleSmall"
   | "bodyLarge"
   | "bodyMedium"
   | "bodySmall"
@@ -31,7 +32,7 @@ export interface ComposeShape {
 
 export interface ComposeBorder {
   width?: number;
-  color?: string;
+  color?: ComposeColor;
   alpha?: number;
 }
 
@@ -39,6 +40,264 @@ export interface ComposePadding {
   horizontal?: number;
   vertical?: number;
 }
+
+export type ComposeCanvasUnit = "px" | "dp" | "fraction";
+
+export interface ComposeUnitValue {
+  value: number;
+  unit: ComposeCanvasUnit;
+}
+
+export type ComposeCanvasNumber = number | ComposeUnitValue;
+
+export type ComposeTextOverflow = "clip" | "ellipsis";
+
+export interface ComposeTextMeasureRequest {
+  text: string;
+  fontSize?: number;
+  maxWidth: number;
+  maxHeight?: number;
+  minWidth?: number;
+  minHeight?: number;
+  maxLines?: number;
+  overflow?: ComposeTextOverflow;
+}
+
+export interface ComposeTextMeasureResult {
+  width: number;
+  height: number;
+}
+
+export interface ComposeColorToken {
+  __colorToken: string;
+  alpha?: number;
+  copy(options: { alpha: number }): ComposeColorToken;
+}
+
+export type ComposeColor = string | ComposeColorToken;
+
+export interface ComposeColorScheme {
+  [key: string]: ComposeColorToken;
+}
+
+export interface ComposeMaterialTheme {
+  colorScheme: ComposeColorScheme;
+}
+
+export interface ComposeCanvasBrush {
+  type: "verticalGradient";
+  colors: ComposeColor[];
+}
+
+export interface ComposeCanvasTransform {
+  scale?: number;
+  offsetX?: number;
+  offsetY?: number;
+  pivotX?: number;
+  pivotY?: number;
+}
+
+export interface ComposeCanvasTransformEvent {
+  centroidX: number;
+  centroidY: number;
+  panX: number;
+  panY: number;
+  zoom: number;
+  rotation: number;
+}
+
+export interface ComposeCanvasSizeEvent {
+  width: number;
+  height: number;
+}
+
+declare global {
+  interface Number {
+    readonly px: ComposeUnitValue;
+    readonly dp: ComposeUnitValue;
+    readonly fraction: ComposeUnitValue;
+  }
+}
+
+export interface ComposeCanvasLineCommand {
+  type: "line";
+  x1: ComposeCanvasNumber;
+  y1: ComposeCanvasNumber;
+  x2: ComposeCanvasNumber;
+  y2: ComposeCanvasNumber;
+  color?: ComposeColor;
+  alpha?: number;
+  strokeWidth?: ComposeCanvasNumber;
+  unit?: ComposeCanvasUnit;
+}
+
+export interface ComposeCanvasRectCommand {
+  type: "rect";
+  x: ComposeCanvasNumber;
+  y: ComposeCanvasNumber;
+  width: ComposeCanvasNumber;
+  height: ComposeCanvasNumber;
+  brush?: ComposeCanvasBrush;
+  color?: ComposeColor;
+  alpha?: number;
+  strokeWidth?: ComposeCanvasNumber;
+  filled?: boolean;
+  unit?: ComposeCanvasUnit;
+}
+
+export interface ComposeCanvasRoundRectCommand {
+  type: "roundRect";
+  x: ComposeCanvasNumber;
+  y: ComposeCanvasNumber;
+  width: ComposeCanvasNumber;
+  height: ComposeCanvasNumber;
+  radius?: ComposeCanvasNumber;
+  brush?: ComposeCanvasBrush;
+  color?: ComposeColor;
+  alpha?: number;
+  strokeWidth?: ComposeCanvasNumber;
+  filled?: boolean;
+  unit?: ComposeCanvasUnit;
+}
+
+export interface ComposeCanvasCircleCommand {
+  type: "circle";
+  cx: ComposeCanvasNumber;
+  cy: ComposeCanvasNumber;
+  radius: ComposeCanvasNumber;
+  color?: ComposeColor;
+  alpha?: number;
+  strokeWidth?: ComposeCanvasNumber;
+  filled?: boolean;
+  unit?: ComposeCanvasUnit;
+}
+
+export interface ComposeCanvasTextCommand {
+  type: "text";
+  x: ComposeCanvasNumber;
+  y: ComposeCanvasNumber;
+  text: string;
+  color?: ComposeColor;
+  alpha?: number;
+  fontSize?: ComposeCanvasNumber;
+  minWidth?: ComposeCanvasNumber;
+  maxWidth?: ComposeCanvasNumber;
+  minHeight?: ComposeCanvasNumber;
+  maxHeight?: ComposeCanvasNumber;
+  maxLines?: number;
+  overflow?: ComposeTextOverflow;
+  unit?: ComposeCanvasUnit;
+}
+
+// Path operations for drawPath command
+export interface ComposeCanvasMoveToOp {
+  type: "moveTo";
+  x: ComposeCanvasNumber;
+  y: ComposeCanvasNumber;
+}
+
+export interface ComposeCanvasLineToOp {
+  type: "lineTo";
+  x: ComposeCanvasNumber;
+  y: ComposeCanvasNumber;
+}
+
+export interface ComposeCanvasCubicToOp {
+  type: "cubicTo";
+  x1: ComposeCanvasNumber;
+  y1: ComposeCanvasNumber;
+  x2: ComposeCanvasNumber;
+  y2: ComposeCanvasNumber;
+  x3: ComposeCanvasNumber;
+  y3: ComposeCanvasNumber;
+}
+
+export interface ComposeCanvasQuadToOp {
+  type: "quadTo";
+  x1: ComposeCanvasNumber;
+  y1: ComposeCanvasNumber;
+  x2: ComposeCanvasNumber;
+  y2: ComposeCanvasNumber;
+}
+
+export interface ComposeCanvasCloseOp {
+  type: "close";
+}
+
+export type ComposeCanvasPathOp =
+  | ComposeCanvasMoveToOp
+  | ComposeCanvasLineToOp
+  | ComposeCanvasCubicToOp
+  | ComposeCanvasQuadToOp
+  | ComposeCanvasCloseOp;
+
+export type ComposeCanvasDrawStyle = "fill" | "stroke";
+
+// Enhanced Canvas commands
+export interface ComposeCanvasDrawPathCommand {
+  type: "drawPath";
+  path: ComposeCanvasPathOp[];
+  color?: ComposeColor;
+  alpha?: number;
+  strokeWidth?: ComposeCanvasNumber;
+  style?: ComposeCanvasDrawStyle;
+  unit?: ComposeCanvasUnit;
+}
+
+export interface ComposeCanvasDrawRoundRectCommand {
+  type: "drawRoundRect";
+  x: ComposeCanvasNumber;
+  y: ComposeCanvasNumber;
+  width: ComposeCanvasNumber;
+  height: ComposeCanvasNumber;
+  cornerRadius?: ComposeCanvasNumber;
+  brush?: ComposeCanvasBrush;
+  color?: ComposeColor;
+  alpha?: number;
+  strokeWidth?: ComposeCanvasNumber;
+  style?: ComposeCanvasDrawStyle;
+  unit?: ComposeCanvasUnit;
+}
+
+export interface ComposeCanvasDrawTextCommand {
+  type: "drawText";
+  text: string;
+  x: ComposeCanvasNumber;
+  y: ComposeCanvasNumber;
+  color?: ComposeColor;
+  alpha?: number;
+  fontSize?: ComposeCanvasNumber;
+  fontWeight?: string;
+  minWidth?: ComposeCanvasNumber;
+  maxWidth?: ComposeCanvasNumber;
+  minHeight?: ComposeCanvasNumber;
+  maxHeight?: ComposeCanvasNumber;
+  maxLines?: number;
+  overflow?: ComposeTextOverflow;
+  unit?: ComposeCanvasUnit;
+}
+
+export interface ComposeCanvasDrawIconCommand {
+  type: "drawIcon";
+  icon: string;
+  x: ComposeCanvasNumber;
+  y: ComposeCanvasNumber;
+  size?: ComposeCanvasNumber;
+  color?: ComposeColor;
+  alpha?: number;
+  unit?: ComposeCanvasUnit;
+}
+
+export type ComposeCanvasCommand =
+  | ComposeCanvasLineCommand
+  | ComposeCanvasRectCommand
+  | ComposeCanvasRoundRectCommand
+  | ComposeCanvasCircleCommand
+  | ComposeCanvasTextCommand
+  | ComposeCanvasDrawPathCommand
+  | ComposeCanvasDrawRoundRectCommand
+  | ComposeCanvasDrawTextCommand
+  | ComposeCanvasDrawIconCommand;
 
 export interface ComposeModifierOp {
   name: string;
@@ -56,7 +315,7 @@ export type ComposeModifierProxy = ComposeModifierValue & {
 export interface ComposeTextFieldStyle {
   fontSize?: number;
   fontWeight?: string;
-  color?: string;
+  color?: ComposeColor;
 }
 
 export interface ComposeCommonProps {
@@ -69,9 +328,12 @@ export interface ComposeCommonProps {
   padding?: number | ComposePadding;
   paddingHorizontal?: number;
   paddingVertical?: number;
+  paddingBottom?: number;
   spacing?: number;
   fillMaxWidth?: boolean;
   fillMaxSize?: boolean;
+  backgroundBrush?: ComposeCanvasBrush;
+  backgroundShape?: ComposeShape;
 }
 
 export interface ColumnProps extends ComposeCommonProps {
@@ -97,8 +359,9 @@ export interface SpacerProps {
 export interface TextProps extends ComposeCommonProps {
   text: string;
   style?: ComposeTextStyle;
-  color?: string;
+  color?: ComposeColor;
   fontWeight?: string;
+  fontSize?: number;
   maxLines?: number;
   weight?: number;
 }
@@ -140,23 +403,25 @@ export interface IconButtonProps extends ComposeCommonProps {
 }
 
 export interface CardProps extends ComposeCommonProps {
-  containerColor?: string;
-  contentColor?: string;
+  containerColor?: ComposeColor;
+  containerAlpha?: number;
+  contentColor?: ComposeColor;
+  contentAlpha?: number;
   shape?: ComposeShape;
   border?: ComposeBorder;
   elevation?: number;
 }
 
 export interface SurfaceProps extends ComposeCommonProps {
-  containerColor?: string;
-  contentColor?: string;
+  containerColor?: ComposeColor;
+  contentColor?: ComposeColor;
   shape?: ComposeShape;
   alpha?: number;
 }
 
 export interface IconProps extends ComposeCommonProps {
   name?: string;
-  tint?: string;
+  tint?: ComposeColor;
   size?: number;
 }
 
@@ -170,10 +435,17 @@ export interface LinearProgressIndicatorProps extends ComposeCommonProps {
 
 export interface CircularProgressIndicatorProps extends ComposeCommonProps {
   strokeWidth?: number;
-  color?: string;
+  color?: ComposeColor;
 }
 
 export interface SnackbarHostProps extends ComposeCommonProps {}
+
+export interface CanvasProps extends ComposeCommonProps {
+  commands?: ComposeCanvasCommand[];
+  transform?: ComposeCanvasTransform;
+  onTransform?: (event: ComposeCanvasTransformEvent) => void;
+  onSizeChanged?: (event: ComposeCanvasSizeEvent) => void;
+}
 
 export interface ComposeNode {
   type: string;
@@ -206,6 +478,7 @@ export interface ComposeUiFactoryRegistry {
   LinearProgressIndicator: ComposeNodeFactory<LinearProgressIndicatorProps>;
   CircularProgressIndicator: ComposeNodeFactory<CircularProgressIndicatorProps>;
   SnackbarHost: ComposeNodeFactory<SnackbarHostProps>;
+  Canvas: ComposeNodeFactory<CanvasProps>;
 }
 
 export interface ComposeTemplateValues {
@@ -232,8 +505,12 @@ export interface ComposeResolveToolNameRequest {
 }
 
 export interface ComposeDslContext {
+  MaterialTheme: ComposeMaterialTheme;
   useState<T>(key: string, initialValue: T): [T, (value: T) => void];
+  useMutable<T>(key: string, initialValue: T): [T, (value: T) => void];
+  useRef<T>(key: string, initialValue: T): { current: T };
   useMemo<T>(key: string, factory: () => T, deps?: unknown[]): T;
+  measureText(request: ComposeTextMeasureRequest): ComposeTextMeasureResult;
 
   callTool<T = any>(toolName: string, params?: Record<string, unknown>): Promise<T>;
   getEnv(key: string): string | undefined;

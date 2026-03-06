@@ -21,6 +21,7 @@ import com.ai.assistance.operit.util.ImagePoolManager
 import com.ai.assistance.operit.util.OperitPaths
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import org.json.JSONArray
 
 /**
  * JavaScript 引擎 - 通过 WebView 执行 JavaScript 脚本 提供与 Android 原生代码的交互机制
@@ -279,6 +280,29 @@ class JsEngine(private val context: Context) {
                 .put("success", false)
                 .put("error", "java bridge callback interrupted: ${e.message}")
                 .toString()
+        }
+    }
+
+    private fun splitBridgeResult(raw: String): Pair<String?, Any?> {
+        if (raw.isBlank()) {
+            return Pair("empty bridge response", null)
+        }
+        return try {
+            val token = JSONTokener(raw).nextValue()
+            if (token is JSONObject) {
+                val success = token.optBoolean("success", false)
+                val data = token.opt("data")
+                val error = token.optString("error").ifBlank { null }
+                if (success) {
+                    Pair(null, data)
+                } else {
+                    Pair(error ?: "bridge call failed", null)
+                }
+            } else {
+                Pair("invalid bridge response format", null)
+            }
+        } catch (e: Exception) {
+            Pair("failed to parse bridge response: ${e.message}", null)
         }
     }
 
@@ -849,6 +873,14 @@ class JsEngine(private val context: Context) {
         }
 
         @JavascriptInterface
+        fun measureComposeText(payloadJson: String): String {
+            return JsNativeInterfaceDelegates.measureComposeText(
+                context = context,
+                payloadJson = payloadJson
+            )
+        }
+
+        @JavascriptInterface
         fun registerToolPkgToolboxUiModule(specJson: String) {
             toolPkgRegistrationSession.appendToolboxUiModule(specJson)
         }
@@ -981,6 +1013,90 @@ class JsEngine(private val context: Context) {
                     },
                     bridgeClassLoader = getJavaBridgeClassLoader()
             )
+        }
+
+        @JavascriptInterface
+        fun javaCallStaticSuspend(
+                className: String,
+                methodName: String,
+                argsJson: String,
+                callbackId: String
+        ) {
+            val normalizedCallback = callbackId.trim()
+            if (normalizedCallback.isEmpty()) {
+                return
+            }
+            Thread {
+                JsJavaBridgeDelegates.callStaticSuspend(
+                    className = className,
+                    methodName = methodName,
+                    argsJson = argsJson,
+                    objectRegistry = javaObjectRegistry,
+                    callback = { resultJson ->
+                        val (error, data) = splitBridgeResult(resultJson)
+                        val argsJsonPayload =
+                            JSONArray()
+                                .put(error)
+                                .put(data)
+                                .toString()
+                        invokeJavaBridgeJsObjectCallbackSync(
+                            jsObjectId = normalizedCallback,
+                            methodName = "",
+                            argsJson = argsJsonPayload
+                        )
+                    },
+                    jsCallbackInvoker = { jsObjectId, callbackMethod, callbackArgsJson ->
+                        invokeJavaBridgeJsObjectCallbackSync(
+                            jsObjectId = jsObjectId,
+                            methodName = callbackMethod,
+                            argsJson = callbackArgsJson
+                        )
+                    },
+                    bridgeClassLoader = getJavaBridgeClassLoader()
+                )
+            }.start()
+        }
+
+        @JavascriptInterface
+        fun javaCallInstanceSuspend(
+                instanceHandle: String,
+                methodName: String,
+                argsJson: String,
+                callbackId: String
+        ) {
+            val normalizedCallback = callbackId.trim()
+            if (normalizedCallback.isEmpty()) {
+                return
+            }
+            Thread {
+                JsJavaBridgeDelegates.callInstanceSuspend(
+                    instanceHandle = instanceHandle,
+                    methodName = methodName,
+                    argsJson = argsJson,
+                    objectRegistry = javaObjectRegistry,
+                    callback = { resultJson ->
+                        val (error, data) = splitBridgeResult(resultJson)
+                        val argsJsonPayload =
+                            JSONArray()
+                                .put(error)
+                                .put(data)
+                                .toString()
+                        invokeJavaBridgeJsObjectCallbackSync(
+                            jsObjectId = normalizedCallback,
+                            methodName = "",
+                            argsJson = argsJsonPayload
+                        )
+                    },
+                    jsCallbackInvoker = { jsObjectId, callbackMethod, callbackArgsJson ->
+                        invokeJavaBridgeJsObjectCallbackSync(
+                            jsObjectId = jsObjectId,
+                            methodName = callbackMethod,
+                            argsJson = callbackArgsJson
+                        )
+                    },
+                    bridgeClassLoader = getJavaBridgeClassLoader()
+                )
+            }.start()
         }
 
         @JavascriptInterface

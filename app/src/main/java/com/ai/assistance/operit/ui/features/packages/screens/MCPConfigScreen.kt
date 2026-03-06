@@ -15,7 +15,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.ContentCopy
@@ -1070,7 +1069,7 @@ fun MCPConfigScreen(
                             contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                             modifier = Modifier.size(56.dp)
                         ) {
-                            Icon(Icons.Default.Download, contentDescription = stringResource(R.string.import_action))
+                            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.import_action))
                         }
                     }
                 }

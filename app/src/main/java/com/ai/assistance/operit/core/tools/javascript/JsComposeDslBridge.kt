@@ -42,6 +42,56 @@ internal fun buildComposeDslContextBridgeDefinition(): String {
                 }
             }
 
+            function __operit_define_unit_getter(unitName) {
+                try {
+                    if (!unitName || typeof unitName !== 'string') {
+                        return;
+                    }
+                    if (Object.prototype.hasOwnProperty.call(Number.prototype, unitName)) {
+                        return;
+                    }
+                    Object.defineProperty(Number.prototype, unitName, {
+                        configurable: true,
+                        enumerable: false,
+                        get: function() {
+                            return { __unit: unitName, value: this.valueOf() };
+                        }
+                    });
+                } catch (e) {
+                }
+            }
+
+            function __operit_define_array_unit_getter(unitName) {
+                try {
+                    if (!unitName || typeof unitName !== 'string') {
+                        return;
+                    }
+                    if (Object.prototype.hasOwnProperty.call(Array.prototype, unitName)) {
+                        return;
+                    }
+                    Object.defineProperty(Array.prototype, unitName, {
+                        configurable: true,
+                        enumerable: false,
+                        get: function() {
+                            if (!Array.isArray(this)) {
+                                return [];
+                            }
+                            return this.map(function(item) {
+                                return { __unit: unitName, value: item };
+                            });
+                        }
+                    });
+                } catch (e) {
+                }
+            }
+
+            __operit_define_unit_getter('px');
+            __operit_define_unit_getter('dp');
+            __operit_define_unit_getter('fraction');
+            __operit_define_array_unit_getter('px');
+            __operit_define_array_unit_getter('dp');
+            __operit_define_array_unit_getter('fraction');
+
             function formatTemplateInternal(template, values) {
                 var result = String(template || '');
                 var source = values && typeof values === 'object' ? values : {};
@@ -172,6 +222,33 @@ internal fun buildComposeDslContextBridgeDefinition(): String {
                     ];
                 }
 
+                function useMutable(key, initialValue) {
+                    var stateKey = String(key || '').trim();
+                    if (!stateKey) {
+                        throw new Error('useMutable key is required');
+                    }
+                    if (!Object.prototype.hasOwnProperty.call(runtime.memoStore, stateKey)) {
+                        runtime.memoStore[stateKey] = initialValue;
+                    }
+                    return [
+                        runtime.memoStore[stateKey],
+                        function(nextValue) {
+                            runtime.memoStore[stateKey] = nextValue;
+                        }
+                    ];
+                }
+
+                function useRef(key, initialValue) {
+                    var stateKey = String(key || '').trim();
+                    if (!stateKey) {
+                        throw new Error('useRef key is required');
+                    }
+                    if (!Object.prototype.hasOwnProperty.call(runtime.memoStore, stateKey)) {
+                        runtime.memoStore[stateKey] = { current: initialValue };
+                    }
+                    return runtime.memoStore[stateKey];
+                }
+
                 function useMemo(key, factory, deps) {
                     var memoKey = String(key || '').trim();
                     if (!memoKey) {
@@ -240,6 +317,28 @@ internal fun buildComposeDslContextBridgeDefinition(): String {
                     });
                 }
 
+                function createColorToken(name, alpha) {
+                    return {
+                        __colorToken: String(name || ''),
+                        alpha: typeof alpha === 'number' ? alpha : undefined,
+                        copy: function(options) {
+                            var nextAlpha = options && typeof options.alpha === 'number' ? options.alpha : alpha;
+                            return createColorToken(name, nextAlpha);
+                        }
+                    };
+                }
+
+                var MaterialTheme = {
+                    colorScheme: new Proxy({}, {
+                        get: function(_target, key) {
+                            if (typeof key !== 'string') {
+                                return undefined;
+                            }
+                            return createColorToken(key);
+                        }
+                    })
+                };
+
                 var uiProxy = new Proxy({}, {
                     get: function(_target, key) {
                         if (typeof key !== 'string') {
@@ -250,7 +349,10 @@ internal fun buildComposeDslContextBridgeDefinition(): String {
                 });
 
                 var ctx = {
+                    MaterialTheme: MaterialTheme,
                     useState: useState,
+                    useMutable: useMutable,
+                    useRef: useRef,
                     useMemo: useMemo,
                     callTool: function(toolName, params) {
                         return toolCall(toolName, params || {});
@@ -303,6 +405,14 @@ internal fun buildComposeDslContextBridgeDefinition(): String {
                     reportError: function(error) {
                         console.error('compose_dsl reportError:', error);
                         return Promise.resolve();
+                    },
+                    measureText: function(options) {
+                        var payload = options && typeof options === 'object' ? options : {};
+                        var json = invokeNative('measureComposeText', [JSON.stringify(payload)]);
+                        if (typeof json !== 'string' || !json.trim()) {
+                            throw new Error('measureText failed to return data');
+                        }
+                        return JSON.parse(json);
                     },
                     getModuleSpec: function() {
                         return runtime.moduleSpec;

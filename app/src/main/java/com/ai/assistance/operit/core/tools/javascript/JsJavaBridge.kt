@@ -356,6 +356,34 @@ internal fun buildJavaClassBridgeDefinition(): String {
                 return args;
             }
 
+            function scheduleSuspendCall(invoker, args) {
+                var argList = Array.isArray(args) ? args.slice() : [];
+                var last = argList.length > 0 ? argList[argList.length - 1] : undefined;
+                var callback = typeof last === 'function' ? last : null;
+                if (callback) {
+                    argList = argList.slice(0, -1);
+                }
+                if (!callback && typeof Promise !== 'function') {
+                    throw new Error('callback or Promise is required for suspend call');
+                }
+                if (!callback) {
+                    return new Promise(function(resolve, reject) {
+                        var promiseCallback = function(error, value) {
+                            if (error) {
+                                reject(new Error(error));
+                            } else {
+                                resolve(value);
+                            }
+                        };
+                        var callbackId = registerJsObject(promiseCallback);
+                        invoker(callbackId, argList);
+                    });
+                }
+                var callbackId = registerJsObject(callback);
+                invoker(callbackId, argList);
+                return undefined;
+            }
+
             function invokeBridge(methodName, args) {
                 if (!hasNative(methodName)) {
                     throw new Error('NativeInterface.' + methodName + ' is unavailable');
@@ -380,6 +408,13 @@ internal fun buildJavaClassBridgeDefinition(): String {
                 return wrapValue(parsed.data);
             }
 
+            function invokeNativeSuspend(methodName, args) {
+                if (!hasNative(methodName)) {
+                    throw new Error('NativeInterface.' + methodName + ' is unavailable');
+                }
+                NativeInterface[methodName].apply(NativeInterface, args || []);
+            }
+
             function createInstanceProxy(className, handle) {
                 var target = {
                     __javaClass: className,
@@ -393,6 +428,20 @@ internal fun buildJavaClassBridgeDefinition(): String {
                             String(methodName || ''),
                             JSON.stringify(normalizeArgs(args))
                         ]);
+                    },
+                    callSuspend: function(methodName) {
+                        var args = Array.prototype.slice.call(arguments, 1);
+                        return scheduleSuspendCall(
+                            function(callbackId, payloadArgs) {
+                                invokeNativeSuspend('javaCallInstanceSuspend', [
+                                    handle,
+                                    String(methodName || ''),
+                                    JSON.stringify(normalizeArgs(payloadArgs)),
+                                    callbackId
+                                ]);
+                            },
+                            args
+                        );
                     },
                     get: function(fieldName) {
                         if (arguments.length === 0) {
@@ -486,6 +535,72 @@ internal fun buildJavaClassBridgeDefinition(): String {
                 return proxy;
             }
 
+            function shouldFallbackToCompanion(message) {
+                if (!message) {
+                    return false;
+                }
+                var text = String(message);
+                return (
+                    text.indexOf("method '") >= 0 &&
+                    text.indexOf(" not found on ") >= 0
+                ) || (text.indexOf("no method '") >= 0 && text.indexOf(" matched on ") >= 0);
+            }
+
+            function callCompanionInstanceMethod(className, methodName, args) {
+                try {
+                    var companionInstance = invokeBridge('javaGetStaticField', [
+                        className,
+                        'Companion'
+                    ]);
+                    if (
+                        companionInstance &&
+                        typeof companionInstance[methodName] === 'function'
+                    ) {
+                        return { hit: true, value: companionInstance[methodName].apply(companionInstance, args || []) };
+                    }
+                } catch (_e) {
+                }
+                return { hit: false };
+            }
+
+            function callStaticWithCompanionFallback(className, methodName, args) {
+                try {
+                    return invokeBridge('javaCallStatic', [
+                        className,
+                        String(methodName || ''),
+                        JSON.stringify(normalizeArgs(args || []))
+                    ]);
+                } catch (e) {
+                    if (!shouldFallbackToCompanion(e && e.message)) {
+                        throw e;
+                    }
+                    var instanceAttempt = callCompanionInstanceMethod(className, methodName, args);
+                    if (instanceAttempt && instanceAttempt.hit) {
+                        return instanceAttempt.value;
+                    }
+                    var companionClassName = className + '${'$'}Companion';
+                    if (classExistsRaw(companionClassName)) {
+                        try {
+                            return invokeBridge('javaCallStatic', [
+                                companionClassName,
+                                String(methodName || ''),
+                                JSON.stringify(normalizeArgs(args || []))
+                            ]);
+                        } catch (e2) {
+                            if (!shouldFallbackToCompanion(e2 && e2.message)) {
+                                throw e2;
+                            }
+                            var retryInstance = callCompanionInstanceMethod(className, methodName, args);
+                            if (retryInstance && retryInstance.hit) {
+                                return retryInstance.value;
+                            }
+                            throw e2;
+                        }
+                    }
+                    throw e;
+                }
+            }
+
             function createClassProxy(className) {
                 var target = function() {
                     return target.newInstance.apply(target, arguments);
@@ -501,11 +616,21 @@ internal fun buildJavaClassBridgeDefinition(): String {
                 };
                 target.callStatic = function(methodName) {
                     var args = Array.prototype.slice.call(arguments, 1);
-                    return invokeBridge('javaCallStatic', [
-                        className,
-                        String(methodName || ''),
-                        JSON.stringify(normalizeArgs(args))
-                    ]);
+                    return callStaticWithCompanionFallback(className, methodName, args);
+                };
+                target.callSuspend = function(methodName) {
+                    var args = Array.prototype.slice.call(arguments, 1);
+                    return scheduleSuspendCall(
+                        function(callbackId, payloadArgs) {
+                            invokeNativeSuspend('javaCallStaticSuspend', [
+                                className,
+                                String(methodName || ''),
+                                JSON.stringify(normalizeArgs(payloadArgs)),
+                                callbackId
+                            ]);
+                        },
+                        args
+                    );
                 };
                 target.getStatic = function(fieldName) {
                     return invokeBridge('javaGetStaticField', [
@@ -558,11 +683,7 @@ internal fun buildJavaClassBridgeDefinition(): String {
                         }
                         return function() {
                             var args = Array.prototype.slice.call(arguments);
-                            return invokeBridge('javaCallStatic', [
-                                className,
-                                prop,
-                                JSON.stringify(normalizeArgs(args))
-                            ]);
+                            return callStaticWithCompanionFallback(className, prop, args);
                         };
                     },
                     apply: function(obj, _thisArg, args) {
@@ -730,6 +851,22 @@ internal fun buildJavaClassBridgeDefinition(): String {
                         normalizedMethod,
                         JSON.stringify(normalizeArgs(args))
                     ]);
+                },
+                callSuspend: function(className, methodName) {
+                    var normalizedClass = String(className || '').trim();
+                    var normalizedMethod = String(methodName || '').trim();
+                    var args = Array.prototype.slice.call(arguments, 2);
+                    return scheduleSuspendCall(
+                        function(callbackId, payloadArgs) {
+                            invokeNativeSuspend('javaCallStaticSuspend', [
+                                normalizedClass,
+                                normalizedMethod,
+                                JSON.stringify(normalizeArgs(payloadArgs)),
+                                callbackId
+                            ]);
+                        },
+                        args
+                    );
                 },
                 newInstance: function(className) {
                     var normalizedClass = String(className || '').trim();

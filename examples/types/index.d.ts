@@ -65,6 +65,7 @@ import {
     ComposeDslScreen as ComposeDslScreenType,
     ComposeNode as ComposeNodeType
 } from './compose-dsl';
+import type * as ToolPkgTypes from './toolpkg';
 
 // Export core interfaces and functions
 export * from './core';
@@ -143,6 +144,44 @@ declare global {
     type JavaBridgeJsMethod = JavaBridgeJsMethodType;
     type JavaBridgeInterfaceRef = JavaBridgeInterfaceRefType;
     type JavaBridgeCallbackResult = JavaBridgeCallbackResultType;
+
+    // ToolPkg types
+    type ToolPkgLocalizedText = ToolPkgTypes.ToolPkgLocalizedText;
+    type ToolPkgJsonPrimitive = ToolPkgTypes.ToolPkgJsonPrimitive;
+    type ToolPkgJsonValue = ToolPkgTypes.ToolPkgJsonValue;
+    type ToolPkgJsonObject = ToolPkgTypes.ToolPkgJsonObject;
+    type ToolPkgAppLifecycleEvent = ToolPkgTypes.ToolPkgAppLifecycleEvent;
+    type ToolPkgHookEventName = ToolPkgTypes.ToolPkgHookEventName;
+    type ToolPkgHookReturn = ToolPkgTypes.ToolPkgHookReturn;
+    type ToolPkgHookHandler<TEvent> = ToolPkgTypes.ToolPkgHookHandler<TEvent>;
+    type ToolPkgHookEventBase<TEventName extends string, TPayload extends ToolPkgJsonObject = ToolPkgJsonObject> =
+        ToolPkgTypes.ToolPkgHookEventBase<TEventName, TPayload>;
+    type ToolPkgAppLifecycleEventPayload = ToolPkgTypes.ToolPkgAppLifecycleEventPayload;
+    type ToolPkgMessageProcessingEventPayload = ToolPkgTypes.ToolPkgMessageProcessingEventPayload;
+    type ToolPkgXmlRenderEventPayload = ToolPkgTypes.ToolPkgXmlRenderEventPayload;
+    type ToolPkgInputMenuToggleEventPayload = ToolPkgTypes.ToolPkgInputMenuToggleEventPayload;
+    type ToolPkgAppLifecycleHookEvent = ToolPkgTypes.ToolPkgAppLifecycleHookEvent;
+    type ToolPkgMessageProcessingHookEvent = ToolPkgTypes.ToolPkgMessageProcessingHookEvent;
+    type ToolPkgXmlRenderHookEvent = ToolPkgTypes.ToolPkgXmlRenderHookEvent;
+    type ToolPkgInputMenuToggleHookEvent = ToolPkgTypes.ToolPkgInputMenuToggleHookEvent;
+    type ToolPkgAppLifecycleHookReturn = ToolPkgTypes.ToolPkgAppLifecycleHookReturn;
+    type ToolPkgMessageProcessingHookObjectResult = ToolPkgTypes.ToolPkgMessageProcessingHookObjectResult;
+    type ToolPkgMessageProcessingHookReturn = ToolPkgTypes.ToolPkgMessageProcessingHookReturn;
+    type ToolPkgXmlRenderHookObjectResult = ToolPkgTypes.ToolPkgXmlRenderHookObjectResult;
+    type ToolPkgXmlRenderHookReturn = ToolPkgTypes.ToolPkgXmlRenderHookReturn;
+    type ToolPkgInputMenuToggleDefinitionResult = ToolPkgTypes.ToolPkgInputMenuToggleDefinitionResult;
+    type ToolPkgInputMenuToggleObjectResult = ToolPkgTypes.ToolPkgInputMenuToggleObjectResult;
+    type ToolPkgInputMenuToggleHookReturn = ToolPkgTypes.ToolPkgInputMenuToggleHookReturn;
+    type ToolPkgAppLifecycleHookHandler = ToolPkgTypes.ToolPkgAppLifecycleHookHandler;
+    type ToolPkgMessageProcessingHookHandler = ToolPkgTypes.ToolPkgMessageProcessingHookHandler;
+    type ToolPkgXmlRenderHookHandler = ToolPkgTypes.ToolPkgXmlRenderHookHandler;
+    type ToolPkgInputMenuToggleHookHandler = ToolPkgTypes.ToolPkgInputMenuToggleHookHandler;
+    type ToolPkgToolboxUiModuleRegistration = ToolPkgTypes.ToolPkgToolboxUiModuleRegistration;
+    type ToolPkgAppLifecycleHookRegistration = ToolPkgTypes.ToolPkgAppLifecycleHookRegistration;
+    type ToolPkgMessageProcessingPluginRegistration = ToolPkgTypes.ToolPkgMessageProcessingPluginRegistration;
+    type ToolPkgXmlRenderPluginRegistration = ToolPkgTypes.ToolPkgXmlRenderPluginRegistration;
+    type ToolPkgInputMenuTogglePluginRegistration = ToolPkgTypes.ToolPkgInputMenuTogglePluginRegistration;
+    type ToolPkgRegistry = ToolPkgTypes.ToolPkgRegistry;
 
 
     // Make result types available globally

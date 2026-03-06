@@ -18,6 +18,7 @@ import com.ai.assistance.operit.data.model.ParameterValueType
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -41,6 +42,36 @@ class ApiPreferences private constructor(private val context: Context) {
                 instance
             }
         }
+        @JvmStatic
+        fun getFeatureToggleBlocking(
+            context: Context,
+            featureKey: String,
+            defaultValue: Boolean = false
+        ): Boolean {
+            val normalized = featureKey.trim()
+            if (normalized.isEmpty()) {
+                return defaultValue
+            }
+            return runBlocking {
+                getInstance(context).featureToggleFlow(normalized, defaultValue).first()
+            }
+        }
+
+        @JvmStatic
+        fun setFeatureToggleBlocking(
+            context: Context,
+            featureKey: String,
+            enabled: Boolean
+        ) {
+            val normalized = featureKey.trim()
+            if (normalized.isEmpty()) {
+                return
+            }
+            runBlocking {
+                getInstance(context).saveFeatureToggle(normalized, enabled)
+            }
+        }
+
         // 动态生成供应商:模型的Token键
         fun getTokenInputKey(providerModel: String) =
                 intPreferencesKey("token_input_${providerModel.replace(":", "_")}")

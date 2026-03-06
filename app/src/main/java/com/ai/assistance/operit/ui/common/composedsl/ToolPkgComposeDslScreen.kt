@@ -2,7 +2,9 @@ package com.ai.assistance.operit.ui.common.composedsl
 
 import android.graphics.Color as AndroidColor
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,13 +51,27 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.drawscope.Fill
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
@@ -394,12 +410,32 @@ fun ToolPkgComposeDslToolScreen(
 }
 
 @Composable
+fun RenderToolPkgComposeDslNode(
+    node: ToolPkgComposeDslNode,
+    modifier: Modifier = Modifier,
+    onAction: (String, Any?) -> Unit = { _, _ -> }
+) {
+    Box(modifier = modifier) {
+        renderComposeDslNode(
+            node = node,
+            onAction = onAction,
+            nodePath = "0"
+        )
+    }
+}
+
+@Composable
 internal fun renderComposeDslNode(
     node: ToolPkgComposeDslNode,
     onAction: (String, Any?) -> Unit,
     nodePath: String
 ) {
-    val renderer = composeDslGeneratedNodeRendererRegistry[normalizeToken(node.type)]
+    val normalizedType = normalizeToken(node.type)
+    if (normalizedType == "canvas") {
+        renderCanvasNode(node, onAction)
+        return
+    }
+    val renderer = composeDslGeneratedNodeRendererRegistry[normalizedType]
     if (renderer != null) {
         renderer(node, onAction, nodePath)
         return
@@ -412,6 +448,431 @@ internal fun renderComposeDslNode(
 
 internal typealias ComposeDslNodeRenderer =
     @Composable (ToolPkgComposeDslNode, (String, Any?) -> Unit, String) -> Unit
+
+private data class CanvasCommand(
+    val type: String,
+    val values: Map<String, Any?>,
+    val unit: String,
+    val color: Color,
+    val brush: Brush?,
+    val alpha: Float?,
+    val strokeWidth: Float
+)
+
+private fun canvasNumberFromValue(value: Any?): Float? {
+    return when (value) {
+        is Number -> value.toFloat()
+        is Map<*, *> -> {
+            val raw = value["value"]
+            when (raw) {
+                is Number -> raw.toFloat()
+                else -> raw?.toString()?.toFloatOrNull()
+            }
+        }
+        else -> value?.toString()?.toFloatOrNull()
+    }
+}
+
+private fun canvasUnitFromValue(value: Any?): String? {
+    val map = value as? Map<*, *> ?: return null
+    val token =
+        map["unit"]?.toString()
+            ?: map["__unit"]?.toString()
+    return token?.trim()?.lowercase(Locale.ROOT).orEmpty().ifBlank { null }
+}
+
+
+@Composable
+private fun parseCanvasCommands(raw: Any?): List<CanvasCommand> {
+    val list = raw as? List<*> ?: return emptyList()
+    @Composable
+    fun parseCanvasBrush(value: Any?): Brush? {
+        val map = value as? Map<*, *> ?: return null
+        val type = map["type"]?.toString()?.trim()?.lowercase(Locale.ROOT)
+            ?: throw IllegalArgumentException("canvas brush type is required")
+        require(type == "verticalgradient") { "unsupported canvas brush type: $type" }
+        val colorsRaw = map["colors"] as? List<*>
+            ?: throw IllegalArgumentException("canvas brush colors are required")
+        require(colorsRaw.isNotEmpty()) { "canvas brush colors are empty" }
+        val colors = colorsRaw.mapIndexed { index, entry ->
+            val resolved = resolveColorValue(entry)
+                ?: throw IllegalArgumentException("canvas brush color not resolved at $index")
+            resolved
+        }
+        return Brush.verticalGradient(colors)
+    }
+    return list.mapNotNull { entry ->
+        val map = entry as? Map<*, *> ?: return@mapNotNull null
+        val type = map["type"]?.toString()?.trim().orEmpty()
+        if (type.isBlank()) return@mapNotNull null
+        @Suppress("UNCHECKED_CAST")
+        val values = map.entries.associate { (k, v) -> k.toString() to v } as Map<String, Any?>
+        val unit =
+            canvasUnitFromValue(values["unit"])
+                ?: values["unit"]?.toString()?.trim()?.lowercase(Locale.ROOT)
+                ?: "fraction"
+        val alpha = canvasNumberFromValue(values["alpha"])
+        val strokeWidth = canvasNumberFromValue(values["strokeWidth"]) ?: 1f
+        val resolvedColor = resolveColorValue(values["color"])
+        val color = resolvedColor ?: Color.Unspecified
+        val brush = parseCanvasBrush(values["brush"])
+        CanvasCommand(
+            type = type.lowercase(Locale.ROOT),
+            values = values,
+            unit = unit,
+            color = color,
+            brush = brush,
+            alpha = alpha,
+            strokeWidth = strokeWidth
+        )
+    }
+}
+
+@OptIn(ExperimentalTextApi::class)
+@Composable
+private fun renderCanvasNode(
+    node: ToolPkgComposeDslNode,
+    onAction: (String, Any?) -> Unit
+) {
+    val props = node.props
+    val commands = parseCanvasCommands(props["commands"])
+    val textMeasurer = rememberTextMeasurer()
+    val onTransformActionId = ToolPkgComposeDslParser.extractActionId(props["onTransform"])
+    val onSizeChangedActionId = ToolPkgComposeDslParser.extractActionId(props["onSizeChanged"])
+    var lastSize by remember { mutableStateOf(IntSize.Zero) }
+
+    val transform = props["transform"] as? Map<*, *>
+    val transformScale = (transform?.get("scale") as? Number)?.toFloat()
+    val transformOffsetX = (transform?.get("offsetX") as? Number)?.toFloat()
+    val transformOffsetY = (transform?.get("offsetY") as? Number)?.toFloat()
+    val transformPivotX = (transform?.get("pivotX") as? Number)?.toFloat()
+    val transformPivotY = (transform?.get("pivotY") as? Number)?.toFloat()
+    var localScale by remember(transformScale, transformOffsetX, transformOffsetY) {
+        mutableStateOf(transformScale ?: 1f)
+    }
+    var localOffset by remember(transformScale, transformOffsetX, transformOffsetY) {
+        mutableStateOf(
+            androidx.compose.ui.geometry.Offset(
+                transformOffsetX ?: 0f,
+                transformOffsetY ?: 0f
+            )
+        )
+    }
+
+    var modifier =
+        applyCommonModifier(Modifier, props)
+            .onSizeChanged { size ->
+                if (onSizeChangedActionId != null && size != lastSize) {
+                    lastSize = size
+                    onAction(
+                        onSizeChangedActionId,
+                        mapOf(
+                            "width" to size.width,
+                            "height" to size.height
+                        )
+                    )
+                }
+            }
+
+    if (onTransformActionId != null) {
+        modifier =
+            modifier.pointerInput(onTransformActionId) {
+                detectTransformGestures { centroid, pan, zoom, rotation ->
+                    localScale = (localScale * zoom).coerceIn(0.6f, 2f)
+                    localOffset = localOffset + pan
+                    onAction(
+                        onTransformActionId,
+                        mapOf(
+                            "__no_render" to true,
+                            "centroidX" to centroid.x,
+                            "centroidY" to centroid.y,
+                            "panX" to pan.x,
+                            "panY" to pan.y,
+                            "zoom" to zoom,
+                            "rotation" to rotation
+                        )
+                    )
+                }
+            }
+    }
+
+    Canvas(modifier = modifier) {
+        val widthPx = size.width
+        val heightPx = size.height
+
+        fun resolve(value: Any?, defaultUnit: String, axis: String): Float {
+            val unit = canvasUnitFromValue(value) ?: defaultUnit
+            val numeric = canvasNumberFromValue(value) ?: 0f
+            return when (unit) {
+                "fraction" -> if (axis == "x") numeric * widthPx else numeric * heightPx
+                "dp" -> numeric.dp.toPx()
+                else -> numeric
+            }
+        }
+
+        fun drawCommands() {
+            commands.forEach { command ->
+            val values = command.values
+            val unit = command.unit
+            val strokeWidth = command.strokeWidth
+            val color = if (command.alpha != null) command.color.copy(alpha = command.alpha) else command.color
+            val brush = command.brush
+            val brushAlpha = command.alpha ?: 1f
+
+            fun resolveStyle(): androidx.compose.ui.graphics.drawscope.DrawStyle {
+                val token = values["style"]?.toString()?.trim()?.lowercase(Locale.ROOT)
+                return if (token == "stroke") Stroke(width = strokeWidth) else Fill
+            }
+
+            fun buildPath(raw: Any?): Path? {
+                val list = raw as? List<*> ?: return null
+                val path = Path()
+                list.forEach { opRaw ->
+                    val op = opRaw as? Map<*, *> ?: return@forEach
+                    val opType = op["type"]?.toString()?.trim()?.lowercase(Locale.ROOT).orEmpty()
+                    when (opType) {
+                        "moveto" -> {
+                            val x = resolve(op["x"], unit, "x")
+                            val y = resolve(op["y"], unit, "y")
+                            path.moveTo(x, y)
+                        }
+                        "lineto" -> {
+                            val x = resolve(op["x"], unit, "x")
+                            val y = resolve(op["y"], unit, "y")
+                            path.lineTo(x, y)
+                        }
+                        "cubicto" -> {
+                            val x1 = resolve(op["x1"], unit, "x")
+                            val y1 = resolve(op["y1"], unit, "y")
+                            val x2 = resolve(op["x2"], unit, "x")
+                            val y2 = resolve(op["y2"], unit, "y")
+                            val x3 = resolve(op["x3"], unit, "x")
+                            val y3 = resolve(op["y3"], unit, "y")
+                            path.cubicTo(x1, y1, x2, y2, x3, y3)
+                        }
+                        "quadto" -> {
+                            val x1 = resolve(op["x1"], unit, "x")
+                            val y1 = resolve(op["y1"], unit, "y")
+                            val x2 = resolve(op["x2"], unit, "x")
+                            val y2 = resolve(op["y2"], unit, "y")
+                            path.quadraticBezierTo(x1, y1, x2, y2)
+                        }
+                        "close" -> path.close()
+                    }
+                }
+                return path
+            }
+
+            when (command.type) {
+                "line" -> {
+                    val x1 = resolve(values["x1"], unit, "x")
+                    val y1 = resolve(values["y1"], unit, "y")
+                    val x2 = resolve(values["x2"], unit, "x")
+                    val y2 = resolve(values["y2"], unit, "y")
+                    drawLine(color = color, start = androidx.compose.ui.geometry.Offset(x1, y1), end = androidx.compose.ui.geometry.Offset(x2, y2), strokeWidth = strokeWidth)
+                }
+                "rect" -> {
+                    val x = resolve(values["x"], unit, "x")
+                    val y = resolve(values["y"], unit, "y")
+                    val w = resolve(values["width"], unit, "x")
+                    val h = resolve(values["height"], unit, "y")
+                    val filled = (values["filled"] as? Boolean) ?: true
+                    val style = if (filled) Fill else Stroke(width = strokeWidth)
+                    if (brush != null) {
+                        drawRect(
+                            brush = brush,
+                            topLeft = androidx.compose.ui.geometry.Offset(x, y),
+                            size = androidx.compose.ui.geometry.Size(w, h),
+                            alpha = brushAlpha,
+                            style = style
+                        )
+                    } else {
+                        drawRect(
+                            color = color,
+                            topLeft = androidx.compose.ui.geometry.Offset(x, y),
+                            size = androidx.compose.ui.geometry.Size(w, h),
+                            style = style
+                        )
+                    }
+                }
+                "roundrect" -> {
+                    val x = resolve(values["x"], unit, "x")
+                    val y = resolve(values["y"], unit, "y")
+                    val w = resolve(values["width"], unit, "x")
+                    val h = resolve(values["height"], unit, "y")
+                    val radius = canvasNumberFromValue(values["radius"]) ?: 0f
+                    val filled = (values["filled"] as? Boolean) ?: true
+                    val style = if (filled) Fill else Stroke(width = strokeWidth)
+                    if (brush != null) {
+                        drawRoundRect(
+                            brush = brush,
+                            topLeft = androidx.compose.ui.geometry.Offset(x, y),
+                            size = androidx.compose.ui.geometry.Size(w, h),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(radius, radius),
+                            alpha = brushAlpha,
+                            style = style
+                        )
+                    } else {
+                        drawRoundRect(
+                            color = color,
+                            topLeft = androidx.compose.ui.geometry.Offset(x, y),
+                            size = androidx.compose.ui.geometry.Size(w, h),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(radius, radius),
+                            style = style
+                        )
+                    }
+                }
+                "drawroundrect" -> {
+                    val x = resolve(values["x"], unit, "x")
+                    val y = resolve(values["y"], unit, "y")
+                    val w = resolve(values["width"], unit, "x")
+                    val h = resolve(values["height"], unit, "y")
+                    val radius = canvasNumberFromValue(values["cornerRadius"])
+                        ?: canvasNumberFromValue(values["radius"])
+                        ?: 0f
+                    val style = resolveStyle()
+                    if (brush != null) {
+                        drawRoundRect(
+                            brush = brush,
+                            topLeft = androidx.compose.ui.geometry.Offset(x, y),
+                            size = androidx.compose.ui.geometry.Size(w, h),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(radius, radius),
+                            alpha = brushAlpha,
+                            style = style
+                        )
+                    } else {
+                        drawRoundRect(
+                            color = color,
+                            topLeft = androidx.compose.ui.geometry.Offset(x, y),
+                            size = androidx.compose.ui.geometry.Size(w, h),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(radius, radius),
+                            style = style
+                        )
+                    }
+                }
+                "circle" -> {
+                    val cx = resolve(values["cx"], unit, "x")
+                    val cy = resolve(values["cy"], unit, "y")
+                    val r = resolve(values["radius"], unit, "x")
+                    val filled = (values["filled"] as? Boolean) ?: true
+                    drawCircle(
+                        color = color,
+                        radius = r,
+                        center = androidx.compose.ui.geometry.Offset(cx, cy),
+                        style = if (filled) Fill else Stroke(width = strokeWidth)
+                    )
+                }
+                "text" -> {
+                    val x = resolve(values["x"], unit, "x")
+                    val y = resolve(values["y"], unit, "y")
+                    val text = values["text"]?.toString().orEmpty()
+                    if (text.isNotBlank()) {
+                        val fontSize = canvasNumberFromValue(values["fontSize"]) ?: 10f
+                        val minWidthRaw = values["minWidth"]
+                        val maxWidthRaw = values["maxWidth"]
+                        val minWidth = canvasNumberFromValue(minWidthRaw)
+                        val maxWidth = canvasNumberFromValue(maxWidthRaw)
+                        val minHeightRaw = values["minHeight"]
+                        val maxHeightRaw = values["maxHeight"]
+                        val minHeight = canvasNumberFromValue(minHeightRaw)
+                        val maxHeight = canvasNumberFromValue(maxHeightRaw)
+                        val maxLines = (values["maxLines"] as? Number)?.toInt() ?: Int.MAX_VALUE
+                        val overflowToken = values["overflow"]?.toString()?.trim()?.lowercase(Locale.ROOT)
+                        val overflow =
+                            if (overflowToken == "ellipsis") TextOverflow.Ellipsis else TextOverflow.Clip
+                        val layout = textMeasurer.measure(
+                            text = AnnotatedString(text),
+                            style = TextStyle(color = color, fontSize = fontSize.sp),
+                            maxLines = maxLines,
+                            overflow = overflow,
+                            constraints = if (minWidth != null || maxWidth != null || minHeight != null || maxHeight != null) {
+                                androidx.compose.ui.unit.Constraints(
+                                    minWidth = minWidth?.let { resolve(minWidthRaw, unit, "x").toInt() } ?: 0,
+                                    maxWidth = maxWidth?.let { resolve(maxWidthRaw, unit, "x").toInt() }
+                                        ?: androidx.compose.ui.unit.Constraints.Infinity,
+                                    minHeight = minHeight?.let { resolve(minHeightRaw, unit, "y").toInt() } ?: 0,
+                                    maxHeight = maxHeight?.let { resolve(maxHeightRaw, unit, "y").toInt() }
+                                        ?: androidx.compose.ui.unit.Constraints.Infinity
+                                )
+                            } else {
+                                androidx.compose.ui.unit.Constraints()
+                            }
+                        )
+                        drawText(layout, topLeft = androidx.compose.ui.geometry.Offset(x, y))
+                    }
+                }
+                "drawtext" -> {
+                    val x = resolve(values["x"], unit, "x")
+                    val y = resolve(values["y"], unit, "y")
+                    val text = values["text"]?.toString().orEmpty()
+                    if (text.isNotBlank()) {
+                        val fontSize = canvasNumberFromValue(values["fontSize"]) ?: 10f
+                        val minWidthRaw = values["minWidth"]
+                        val maxWidthRaw = values["maxWidth"]
+                        val minWidth = canvasNumberFromValue(minWidthRaw)
+                        val maxWidth = canvasNumberFromValue(maxWidthRaw)
+                        val minHeightRaw = values["minHeight"]
+                        val maxHeightRaw = values["maxHeight"]
+                        val minHeight = canvasNumberFromValue(minHeightRaw)
+                        val maxHeight = canvasNumberFromValue(maxHeightRaw)
+                        val maxLines = (values["maxLines"] as? Number)?.toInt() ?: Int.MAX_VALUE
+                        val overflowToken = values["overflow"]?.toString()?.trim()?.lowercase(Locale.ROOT)
+                        val overflow =
+                            if (overflowToken == "ellipsis") TextOverflow.Ellipsis else TextOverflow.Clip
+                        val layout = textMeasurer.measure(
+                            text = AnnotatedString(text),
+                            style = TextStyle(color = color, fontSize = fontSize.sp),
+                            maxLines = maxLines,
+                            overflow = overflow,
+                            constraints = if (minWidth != null || maxWidth != null || minHeight != null || maxHeight != null) {
+                                androidx.compose.ui.unit.Constraints(
+                                    minWidth = minWidth?.let { resolve(minWidthRaw, unit, "x").toInt() } ?: 0,
+                                    maxWidth = maxWidth?.let { resolve(maxWidthRaw, unit, "x").toInt() }
+                                        ?: androidx.compose.ui.unit.Constraints.Infinity,
+                                    minHeight = minHeight?.let { resolve(minHeightRaw, unit, "y").toInt() } ?: 0,
+                                    maxHeight = maxHeight?.let { resolve(maxHeightRaw, unit, "y").toInt() }
+                                        ?: androidx.compose.ui.unit.Constraints.Infinity
+                                )
+                            } else {
+                                androidx.compose.ui.unit.Constraints()
+                            }
+                        )
+                        drawText(layout, topLeft = androidx.compose.ui.geometry.Offset(x, y))
+                    }
+                }
+                "drawpath" -> {
+                    val path = buildPath(values["path"]) ?: return@forEach
+                    drawPath(path = path, color = color, style = resolveStyle())
+                }
+            }
+            }
+        }
+
+        val activeScale = if (onTransformActionId != null) localScale else transformScale
+        val activeOffset = if (onTransformActionId != null) localOffset else null
+        if (activeScale != null || activeOffset != null) {
+            val pivot =
+                androidx.compose.ui.geometry.Offset(
+                    transformPivotX ?: (widthPx / 2f),
+                    transformPivotY ?: (heightPx / 2f)
+                )
+            withTransform(
+                {
+                    val offsetToUse =
+                        activeOffset ?: androidx.compose.ui.geometry.Offset(0f, 0f)
+                    translate(offsetToUse.x, offsetToUse.y)
+                    if (activeScale != null) {
+                        scale(activeScale, activeScale, pivot)
+                    }
+                }
+            ) {
+                drawCommands()
+            }
+        } else {
+            drawCommands()
+        }
+    }
+}
 
 
 @Composable
@@ -459,9 +920,38 @@ internal fun applyCommonModifier(base: Modifier, props: Map<String, Any?>): Modi
         }
     }
 
+    val backgroundBrush = props["backgroundBrush"]
+    if (backgroundBrush != null) {
+        val shape = shapeFromValue(props["backgroundShape"]) ?: shapeFromValue(props["shape"])
+        val brush = parseBrush(backgroundBrush)
+        if (brush != null) {
+            if (shape != null) {
+                modifier = modifier.clip(shape).background(brush, shape = shape)
+            } else {
+                modifier = modifier.background(brush)
+            }
+        }
+    }
+
     modifier = applyProxyModifierOps(modifier, props["modifier"])
 
     return modifier
+}
+
+@Composable
+private fun parseBrush(value: Any?): Brush? {
+    val map = value as? Map<*, *> ?: return null
+    val type = map["type"]?.toString()?.trim()?.lowercase(Locale.ROOT)
+        ?: throw IllegalArgumentException("brush type is required")
+    require(type == "verticalgradient") { "unsupported brush type: $type" }
+    val colorsRaw = map["colors"] as? List<*>
+        ?: throw IllegalArgumentException("brush colors are required")
+    require(colorsRaw.isNotEmpty()) { "brush colors are empty" }
+    val colors = colorsRaw.mapIndexed { index, entry ->
+        resolveColorValue(entry)
+            ?: throw IllegalArgumentException("brush color not resolved at $index")
+    }
+    return Brush.verticalGradient(colors)
 }
 
 private data class ComposeDslModifierOp(
@@ -638,20 +1128,10 @@ private fun applyOffsetModifierOp(modifier: Modifier, args: List<Any?>): Modifie
 
 @Composable
 private fun colorFromModifierArg(value: Any?): Color? {
-    return when (value) {
-        is Color -> value
-        is Number -> Color(value.toLong().toULong())
-        else -> value?.toString()?.let { token ->
-            resolveColorToken(token) ?: try {
-                Color(AndroidColor.parseColor(token))
-            } catch (_: Exception) {
-                null
-            }
-        }
-    }
+    return resolveColorValue(value)
 }
 
-private fun shapeFromModifierArg(value: Any?): androidx.compose.ui.graphics.Shape? {
+private fun shapeFromValue(value: Any?): androidx.compose.ui.graphics.Shape? {
     if (value is Map<*, *>) {
         val cornerRadius = value["cornerRadius"].floatArg()
         if (cornerRadius != null) {
@@ -661,11 +1141,12 @@ private fun shapeFromModifierArg(value: Any?): androidx.compose.ui.graphics.Shap
     return null
 }
 
+private fun shapeFromModifierArg(value: Any?): androidx.compose.ui.graphics.Shape? {
+    return shapeFromValue(value)
+}
+
 private fun Any?.floatArg(): Float? {
-    return when (this) {
-        is Number -> this.toFloat()
-        else -> this?.toString()?.toFloatOrNull()
-    }
+    return canvasNumberFromValue(this)
 }
 
 internal fun Map<String, Any?>.string(key: String, defaultValue: String = ""): String {
@@ -696,10 +1177,7 @@ internal fun Map<String, Any?>.int(key: String, defaultValue: Int): Int {
 
 internal fun Map<String, Any?>.floatOrNull(key: String): Float? {
     val value = this[key] ?: return null
-    return when (value) {
-        is Number -> value.toFloat()
-        else -> value.toString().toFloatOrNull()
-    }
+    return canvasNumberFromValue(value)
 }
 
 internal fun Map<String, Any?>.dp(key: String, defaultValue: Dp = 0.dp): Dp {
@@ -766,8 +1244,8 @@ internal fun Map<String, Any?>.fontWeightOrNull(key: String): FontWeight? {
 
 @Composable
 internal fun Map<String, Any?>.colorOrNull(key: String): Color? {
-    val raw = stringOrNull(key) ?: return null
-    return resolveColorToken(raw)
+    val value = this[key] ?: return null
+    return resolveColorValue(value)
 }
 
 @Composable
@@ -790,6 +1268,25 @@ internal fun resolveColorToken(raw: String): Color? {
         Color(AndroidColor.parseColor(raw))
     } catch (_: Exception) {
         null
+    }
+}
+
+@Composable
+internal fun resolveColorValue(value: Any?): Color? {
+    return when (value) {
+        is Color -> value
+        is Number -> Color(value.toLong().toULong())
+        is Map<*, *> -> {
+            val token = value["__colorToken"]?.toString()?.trim().orEmpty()
+            if (token.isBlank()) {
+                null
+            } else {
+                val base = resolveColorToken(token) ?: return null
+                val alpha = canvasNumberFromValue(value["alpha"])
+                if (alpha != null) base.copy(alpha = alpha) else base
+            }
+        }
+        else -> value?.toString()?.let { raw -> resolveColorToken(raw) }
     }
 }
 
@@ -829,11 +1326,11 @@ internal fun Map<String, Any?>.borderOrNull(): BorderStroke? {
     val borderValue = this["border"]
     if (borderValue is Map<*, *>) {
         val width = (borderValue["width"] as? Number)?.toFloat() ?: 1f
-        val colorStr = borderValue["color"]?.toString()
         val alpha = (borderValue["alpha"] as? Number)?.toFloat() ?: 1f
 
-        if (colorStr != null) {
-            val color = resolveColorToken(colorStr) ?: MaterialTheme.colorScheme.outline
+        val colorValue = borderValue["color"]
+        if (colorValue != null) {
+            val color = resolveColorValue(colorValue) ?: MaterialTheme.colorScheme.outline
             return BorderStroke(width.dp, color.copy(alpha = alpha))
         }
     }

@@ -770,6 +770,9 @@ fun getJsToolsDefinition(): String {
                     if (senderName) params.sender_name = senderName;
                     return toolCall("send_message_to_ai", params);
                 },
+                sendMessageAdvanced: (params = {}) => {
+                    return toolCall("send_message_to_ai_advanced", params);
+                },
                 // 列出所有角色卡
                 listCharacterCards: () => toolCall("list_character_cards", {})
             }

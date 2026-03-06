@@ -30,7 +30,6 @@ object PluginRegistry {
         if (builtinsInitialized) return
         builtinsInitialized = true
 
-        register(DeepSearchPlugin)
         register(ToolboxPlugin)
         register(ToolPkgCommonBridgePlugin)
         installAll()

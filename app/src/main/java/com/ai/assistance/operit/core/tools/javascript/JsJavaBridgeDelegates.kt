@@ -11,9 +11,13 @@ import java.lang.reflect.Proxy
 import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 import org.json.JSONArray
 import org.json.JSONObject
 import org.json.JSONTokener
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.coroutines.intrinsics.COROUTINE_SUSPENDED
 
 internal typealias JsInterfaceCallbackInvoker = (jsObjectId: String, methodName: String, argsJson: String) -> String
 
@@ -151,6 +155,52 @@ internal object JsJavaBridgeDelegates {
                 )
             methodMatch.method.invoke(instance, *methodMatch.args)
         }
+    }
+
+    fun callStaticSuspend(
+        className: String,
+        methodName: String,
+        argsJson: String,
+        objectRegistry: ConcurrentHashMap<String, Any>,
+        callback: (String) -> Unit,
+        jsCallbackInvoker: JsInterfaceCallbackInvoker? = null,
+        bridgeClassLoader: ClassLoader? = null
+    ) {
+        val target = loadClass(className)
+        callSuspendInternal(
+            targetClass = target,
+            instance = null,
+            methodName = methodName,
+            argsJson = argsJson,
+            staticOnly = true,
+            objectRegistry = objectRegistry,
+            callback = callback,
+            jsCallbackInvoker = jsCallbackInvoker,
+            bridgeClassLoader = bridgeClassLoader
+        )
+    }
+
+    fun callInstanceSuspend(
+        instanceHandle: String,
+        methodName: String,
+        argsJson: String,
+        objectRegistry: ConcurrentHashMap<String, Any>,
+        callback: (String) -> Unit,
+        jsCallbackInvoker: JsInterfaceCallbackInvoker? = null,
+        bridgeClassLoader: ClassLoader? = null
+    ) {
+        val instance = requireInstance(instanceHandle, objectRegistry)
+        callSuspendInternal(
+            targetClass = instance.javaClass,
+            instance = instance,
+            methodName = methodName,
+            argsJson = argsJson,
+            staticOnly = false,
+            objectRegistry = objectRegistry,
+            callback = callback,
+            jsCallbackInvoker = jsCallbackInvoker,
+            bridgeClassLoader = bridgeClassLoader
+        )
     }
 
     fun getStaticField(
@@ -329,8 +379,129 @@ internal object JsJavaBridgeDelegates {
             AppLogger.e(TAG, "Java bridge invocation error: ${cause.message}", cause)
             failure(cause.message ?: cause.javaClass.name)
         } catch (e: Exception) {
-            AppLogger.e(TAG, "Java bridge error: ${e.message}", e)
+            val shouldLog =
+                e !is NoSuchFieldException &&
+                    e !is NoSuchMethodException
+            if (shouldLog) {
+                AppLogger.e(TAG, "Java bridge error: ${e.message}", e)
+            }
             failure(e.message ?: e.javaClass.name)
+        }
+    }
+
+    private fun callSuspendInternal(
+        targetClass: Class<*>,
+        instance: Any?,
+        methodName: String,
+        argsJson: String,
+        staticOnly: Boolean,
+        objectRegistry: ConcurrentHashMap<String, Any>,
+        callback: (String) -> Unit,
+        jsCallbackInvoker: JsInterfaceCallbackInvoker?,
+        bridgeClassLoader: ClassLoader?
+    ) {
+        val normalizedMethodName = methodName.trim()
+        if (normalizedMethodName.isEmpty()) {
+            callback(failure("method name is required"))
+            return
+        }
+
+        val rawArgs = parseArgsJson(argsJson, objectRegistry)
+        val candidates =
+            targetClass.methods.filter { method ->
+                method.name == normalizedMethodName &&
+                    Modifier.isStatic(method.modifiers) == staticOnly &&
+                    method.parameterTypes.isNotEmpty() &&
+                    Continuation::class.java.isAssignableFrom(method.parameterTypes.last())
+            }
+
+        if (candidates.isEmpty() && staticOnly) {
+            val companionInstance =
+                runCatching {
+                    findField(targetClass, "Companion", staticOnly = true)?.get(null)
+                        ?: findGetter(targetClass, "Companion", staticOnly = true)?.invoke(null)
+                }.getOrNull()
+            if (companionInstance != null) {
+                callSuspendInternal(
+                    targetClass = companionInstance.javaClass,
+                    instance = companionInstance,
+                    methodName = methodName,
+                    argsJson = argsJson,
+                    staticOnly = false,
+                    objectRegistry = objectRegistry,
+                    callback = callback,
+                    jsCallbackInvoker = jsCallbackInvoker,
+                    bridgeClassLoader = bridgeClassLoader
+                )
+                return
+            }
+        }
+        if (candidates.isEmpty()) {
+            val callType = if (staticOnly) "static" else "instance"
+            callback(failure("$callType suspend method '$normalizedMethodName' not found on ${targetClass.name}"))
+            return
+        }
+
+        var best: MethodMatch? = null
+        for (method in candidates) {
+            val parameterTypes = method.parameterTypes
+            val argParamTypes = parameterTypes.copyOfRange(0, parameterTypes.size - 1)
+            val converted =
+                convertArguments(
+                    parameterTypes = argParamTypes,
+                    isVarArgs = method.isVarArgs,
+                    rawArgs = rawArgs,
+                    objectRegistry = objectRegistry,
+                    jsCallbackInvoker = jsCallbackInvoker,
+                    bridgeClassLoader = bridgeClassLoader
+                ) ?: continue
+
+            val match = MethodMatch(method, converted.first, converted.second)
+            if (best == null || match.score < best.score) {
+                best = match
+            }
+        }
+
+        val selected = best
+        if (selected == null) {
+            callback(
+                failure("no suspend method '$normalizedMethodName' matched on ${targetClass.name} with ${rawArgs.size} args")
+            )
+            return
+        }
+
+        val completed = AtomicBoolean(false)
+        val continuation =
+            object : Continuation<Any?> {
+                override val context = EmptyCoroutineContext
+                override fun resumeWith(result: Result<Any?>) {
+                    if (!completed.compareAndSet(false, true)) {
+                        return
+                    }
+                    if (result.isSuccess) {
+                        callback(success(result.getOrNull(), objectRegistry))
+                    } else {
+                        val error = result.exceptionOrNull()
+                        callback(failure(error?.message ?: error?.javaClass?.name ?: "unknown error"))
+                    }
+                }
+            }
+
+        try {
+            val argsWithContinuation = selected.args + continuation
+            val outcome = selected.method.invoke(instance, *argsWithContinuation)
+            if (outcome !== COROUTINE_SUSPENDED && completed.compareAndSet(false, true)) {
+                callback(success(outcome, objectRegistry))
+            }
+        } catch (e: InvocationTargetException) {
+            val cause = e.targetException ?: e
+            if (completed.compareAndSet(false, true)) {
+                callback(failure(cause.message ?: cause.javaClass.name))
+            }
+        } catch (e: Exception) {
+            if (completed.compareAndSet(false, true)) {
+                callback(failure(e.message ?: e.javaClass.name))
+            }
         }
     }
 

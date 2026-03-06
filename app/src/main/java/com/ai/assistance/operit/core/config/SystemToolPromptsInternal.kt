@@ -1084,6 +1084,97 @@ object SystemToolPromptsInternal {
                                 )
                         ),
                         ToolPrompt(
+                            name = "send_message_to_ai_advanced",
+                            description = "Send a user message to AI with advanced runtime controls.",
+                            parametersStructured =
+                                listOf(
+                                    ToolParameterSchema(
+                                        name = "message",
+                                        type = "string",
+                                        description = "message content",
+                                        required = true
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "chat_id",
+                                        type = "string",
+                                        description = "optional, target chat id",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "chat_history",
+                                        type = "string",
+                                        description = "optional, JSON array of [role, content]",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "workspace_path",
+                                        type = "string",
+                                        description = "optional workspace path",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "function_type",
+                                        type = "string",
+                                        description = "optional FunctionType enum name, default CHAT",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "prompt_function_type",
+                                        type = "string",
+                                        description = "optional PromptFunctionType enum name, default CHAT",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "enable_thinking",
+                                        type = "boolean",
+                                        description = "optional, enable thinking mode",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "thinking_guidance",
+                                        type = "boolean",
+                                        description = "optional, enable thinking guidance",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "enable_memory_query",
+                                        type = "boolean",
+                                        description = "optional, enable memory query",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "max_tokens",
+                                        type = "integer",
+                                        description = "max token budget for this request",
+                                        required = true
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "token_usage_threshold",
+                                        type = "number",
+                                        description = "token usage threshold in range 0..1",
+                                        required = true
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "custom_system_prompt_template",
+                                        type = "string",
+                                        description = "optional custom system prompt template",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "is_sub_task",
+                                        type = "boolean",
+                                        description = "optional, marks this request as a sub task",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "stream",
+                                        type = "boolean",
+                                        description = "optional, whether to stream output",
+                                        required = false
+                                    )
+                                )
+                        ),
+                        ToolPrompt(
                             name = "list_character_cards",
                             description = "List all role cards.",
                             parametersStructured = listOf()
@@ -3536,6 +3627,97 @@ object SystemToolPromptsInternal {
                                         name = "sender_name",
                                         type = "string",
                                         description = "可选，当以用户身份发送时的显示名称",
+                                        required = false
+                                    )
+                                )
+                        ),
+                        ToolPrompt(
+                            name = "send_message_to_ai_advanced",
+                            description = "向 AI 发送消息（高级参数）。",
+                            parametersStructured =
+                                listOf(
+                                    ToolParameterSchema(
+                                        name = "message",
+                                        type = "string",
+                                        description = "消息内容",
+                                        required = true
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "chat_id",
+                                        type = "string",
+                                        description = "可选，目标对话 ID",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "chat_history",
+                                        type = "string",
+                                        description = "可选，JSON 数组，元素为 [role, content]",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "workspace_path",
+                                        type = "string",
+                                        description = "可选，工作区路径",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "function_type",
+                                        type = "string",
+                                        description = "可选，FunctionType 枚举名，默认 CHAT",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "prompt_function_type",
+                                        type = "string",
+                                        description = "可选，PromptFunctionType 枚举名，默认 CHAT",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "enable_thinking",
+                                        type = "boolean",
+                                        description = "可选，是否启用思考模式",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "thinking_guidance",
+                                        type = "boolean",
+                                        description = "可选，是否启用思考引导",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "enable_memory_query",
+                                        type = "boolean",
+                                        description = "可选，是否启用记忆查询",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "max_tokens",
+                                        type = "integer",
+                                        description = "本次请求最大 token 预算",
+                                        required = true
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "token_usage_threshold",
+                                        type = "number",
+                                        description = "token 使用阈值（0..1）",
+                                        required = true
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "custom_system_prompt_template",
+                                        type = "string",
+                                        description = "可选，自定义系统提示模板",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "is_sub_task",
+                                        type = "boolean",
+                                        description = "可选，标记为子任务",
+                                        required = false
+                                    ),
+                                    ToolParameterSchema(
+                                        name = "stream",
+                                        type = "boolean",
+                                        description = "可选，是否使用流式输出",
                                         required = false
                                     )
                                 )

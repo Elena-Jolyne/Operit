@@ -1192,6 +1192,17 @@ fun registerAllTools(handler: AIToolHandler, context: Context) {
             executor = { tool -> runBlocking(Dispatchers.IO) { chatManagerTool.sendMessageToAI(tool) } }
     )
 
+    // 高级发送消息给AI
+    handler.registerTool(
+            name = "send_message_to_ai_advanced",
+            descriptionGenerator = { tool ->
+                val message = tool.parameters.find { it.name == "message" }?.value ?: ""
+                val preview = if (message.length > 30) "${message.take(30)}..." else message
+                s(R.string.toolreg_send_message_to_ai_desc, preview)
+            },
+            executor = { tool -> runBlocking(Dispatchers.IO) { chatManagerTool.sendMessageToAIAdvanced(tool) } }
+    )
+
     // 列出所有角色卡
     handler.registerTool(
             name = "list_character_cards",

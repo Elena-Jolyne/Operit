@@ -4,6 +4,11 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.Paint
+import android.text.Layout
+import android.text.StaticLayout
+import android.text.TextPaint
+import android.text.TextUtils
 import android.util.Base64
 import com.ai.assistance.operit.core.tools.AIToolHandler
 import com.ai.assistance.operit.core.tools.BinaryResultData
@@ -389,6 +394,69 @@ internal object JsNativeInterfaceDelegates {
             )
             ""
         }
+    }
+
+    fun measureComposeText(context: Context, payloadJson: String): String {
+        val payload = JSONObject(payloadJson)
+        val text = payload.optString("text")
+        if (text.isEmpty()) {
+            return JSONObject()
+                .put("width", 0)
+                .put("height", 0)
+                .toString()
+        }
+
+        val fontSize = payload.optDouble("fontSize", 10.0).toFloat()
+        val maxWidth = payload.optInt("maxWidth", -1)
+        require(maxWidth > 0) { "measureText requires maxWidth" }
+
+        val maxHeight =
+            if (payload.has("maxHeight")) payload.optInt("maxHeight", -1).takeIf { it > 0 } else null
+        val minWidth =
+            if (payload.has("minWidth")) payload.optInt("minWidth", 0).takeIf { it >= 0 } else null
+        val minHeight =
+            if (payload.has("minHeight")) payload.optInt("minHeight", 0).takeIf { it >= 0 } else null
+        val maxLines = payload.optInt("maxLines", Int.MAX_VALUE).takeIf { it > 0 } ?: Int.MAX_VALUE
+        val overflow = payload.optString("overflow", "clip").trim().lowercase()
+
+        val scaledDensity = context.resources.displayMetrics.scaledDensity
+        val paint = TextPaint(Paint.ANTI_ALIAS_FLAG)
+        paint.textSize = fontSize * scaledDensity
+
+        val builder =
+            StaticLayout.Builder.obtain(text, 0, text.length, paint, maxWidth)
+                .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                .setIncludePad(false)
+                .setMaxLines(maxLines)
+
+        if (overflow == "ellipsis") {
+            builder.setEllipsize(TextUtils.TruncateAt.END)
+        }
+
+        val layout = builder.build()
+        var width = 0f
+        for (i in 0 until layout.lineCount) {
+            width = maxOf(width, layout.getLineWidth(i))
+        }
+        var height = layout.height.toFloat()
+
+        if (minWidth != null) {
+            width = maxOf(width, minWidth.toFloat())
+        }
+        if (minHeight != null) {
+            height = maxOf(height, minHeight.toFloat())
+        }
+        if (maxHeight != null) {
+            height = minOf(height, maxHeight.toFloat())
+        }
+        if (width > maxWidth) {
+            width = maxWidth.toFloat()
+        }
+
+        return JSONObject()
+            .put("width", width)
+            .put("height", height)
+            .toString()
     }
 
     fun decompress(

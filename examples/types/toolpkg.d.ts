@@ -1,5 +1,5 @@
 import type { ToolParams } from './core';
-import type { ComposeDslScreen } from './compose-dsl';
+import type { ComposeDslScreen, ComposeNode } from './compose-dsl';
 
 export type ToolPkgLocalizedText = string | { [lang: string]: string };
 export type ToolPkgJsonPrimitive = string | number | boolean | null;
@@ -29,6 +29,80 @@ export type ToolPkgHookEventName =
 export type ToolPkgHookReturn = ToolPkgJsonValue | void | Promise<ToolPkgJsonValue | void>;
 
 export type ToolPkgHookHandler<TEvent> = (event: TEvent) => ToolPkgHookReturn;
+
+export type ToolPkgAppLifecycleHookReturn =
+    | ToolPkgJsonValue
+    | void
+    | Promise<ToolPkgJsonValue | void>;
+
+export interface ToolPkgMessageProcessingHookObjectResult extends ToolPkgJsonObject {
+    matched?: boolean;
+    text?: string;
+    content?: string;
+    chunks?: string[];
+}
+
+export type ToolPkgMessageProcessingHookReturnValue =
+    | boolean
+    | string
+    | ToolPkgMessageProcessingHookObjectResult
+    | null
+    | void;
+
+export type ToolPkgMessageProcessingHookReturn =
+    | ToolPkgMessageProcessingHookReturnValue
+    | Promise<ToolPkgMessageProcessingHookReturnValue>;
+
+export interface ToolPkgXmlRenderHookObjectResult {
+    handled?: boolean;
+    text?: string;
+    content?: string;
+    composeDsl?: {
+        screen: ComposeDslScreen;
+        state?: ToolPkgJsonObject;
+        memo?: ToolPkgJsonObject;
+        moduleSpec?: ToolPkgJsonObject;
+    };
+}
+
+export type ToolPkgXmlRenderHookReturn =
+    | string
+    | ToolPkgXmlRenderHookObjectResult
+    | null
+    | void
+    | Promise<string | ToolPkgXmlRenderHookObjectResult | null | void>;
+
+export interface ToolPkgInputMenuToggleDefinitionResult extends ToolPkgJsonObject {
+    id: string;
+    title: string;
+    description?: string;
+    isChecked?: boolean;
+}
+
+export interface ToolPkgInputMenuToggleObjectResult extends ToolPkgJsonObject {
+    toggles?: ToolPkgInputMenuToggleDefinitionResult[];
+}
+
+export type ToolPkgInputMenuToggleHookReturn =
+    | ToolPkgInputMenuToggleDefinitionResult[]
+    | ToolPkgInputMenuToggleObjectResult
+    | null
+    | void
+    | Promise<ToolPkgInputMenuToggleDefinitionResult[] | ToolPkgInputMenuToggleObjectResult | null | void>;
+
+export type ToolPkgAppLifecycleHookHandler =
+    (event: ToolPkgAppLifecycleHookEvent) => ToolPkgAppLifecycleHookReturn;
+
+export type ToolPkgMessageProcessingHookHandler =
+    (event: ToolPkgMessageProcessingHookEvent) =>
+        ToolPkgMessageProcessingHookReturnValue
+        | Promise<ToolPkgMessageProcessingHookReturnValue>;
+
+export type ToolPkgXmlRenderHookHandler =
+    (event: ToolPkgXmlRenderHookEvent) => ToolPkgXmlRenderHookReturn;
+
+export type ToolPkgInputMenuToggleHookHandler =
+    (event: ToolPkgInputMenuToggleHookEvent) => ToolPkgInputMenuToggleHookReturn;
 
 export interface ToolPkgHookEventBase<
     TEventName extends string,
@@ -104,23 +178,23 @@ export interface ToolPkgToolboxUiModuleRegistration {
 export interface ToolPkgAppLifecycleHookRegistration {
     id: string;
     event: ToolPkgAppLifecycleEvent;
-    function: ToolPkgHookHandler<ToolPkgAppLifecycleHookEvent>;
+    function: ToolPkgAppLifecycleHookHandler;
 }
 
 export interface ToolPkgMessageProcessingPluginRegistration {
     id: string;
-    function: ToolPkgHookHandler<ToolPkgMessageProcessingHookEvent>;
+    function: ToolPkgMessageProcessingHookHandler;
 }
 
 export interface ToolPkgXmlRenderPluginRegistration {
     id: string;
     tag: string;
-    function: ToolPkgHookHandler<ToolPkgXmlRenderHookEvent>;
+    function: ToolPkgXmlRenderHookHandler;
 }
 
 export interface ToolPkgInputMenuTogglePluginRegistration {
     id: string;
-    function: ToolPkgHookHandler<ToolPkgInputMenuToggleHookEvent>;
+    function: ToolPkgInputMenuToggleHookHandler;
 }
 
 export interface ToolPkgRegistry {

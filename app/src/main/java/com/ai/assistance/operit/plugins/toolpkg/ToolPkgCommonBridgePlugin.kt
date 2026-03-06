@@ -1,16 +1,7 @@
 package com.ai.assistance.operit.plugins.toolpkg
 
 import android.content.Context
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.material3.Text
 import com.ai.assistance.operit.core.chat.plugins.MessageProcessingController
 import com.ai.assistance.operit.core.chat.plugins.MessageProcessingExecution
 import com.ai.assistance.operit.core.chat.plugins.MessageProcessingHookParams
@@ -24,12 +15,15 @@ import com.ai.assistance.operit.core.tools.packTool.TOOLPKG_EVENT_XML_RENDER
 import com.ai.assistance.operit.plugins.OperitPlugin
 import com.ai.assistance.operit.ui.common.markdown.XmlRenderPlugin
 import com.ai.assistance.operit.ui.common.markdown.XmlRenderPluginRegistry
+import com.ai.assistance.operit.ui.common.markdown.XmlRenderResult
 import com.ai.assistance.operit.ui.features.chat.components.style.input.common.InputMenuToggleDefinition
 import com.ai.assistance.operit.ui.features.chat.components.style.input.common.InputMenuToggleHookParams
 import com.ai.assistance.operit.ui.features.chat.components.style.input.common.InputMenuTogglePlugin
 import com.ai.assistance.operit.ui.features.chat.components.style.input.common.InputMenuTogglePluginRegistry
 import com.ai.assistance.operit.util.AppLogger
 import com.ai.assistance.operit.util.stream.Stream
+import com.ai.assistance.operit.core.tools.packTool.ToolPkgXmlRenderHookComposeDslResult
+import com.ai.assistance.operit.core.tools.packTool.ToolPkgXmlRenderHookObjectResult
 import com.ai.assistance.operit.util.stream.asStream
 import com.ai.assistance.operit.util.stream.streamOf
 import java.util.concurrent.atomic.AtomicBoolean
@@ -170,89 +164,160 @@ private object ToolPkgXmlRenderBridgePlugin : XmlRenderPlugin {
         return true
     }
 
-    @Composable
-    override fun Render(
+    override suspend fun resolve(
+        context: Context,
         xmlContent: String,
         tagName: String,
-        modifier: Modifier,
         textColor: Color,
         xmlStream: Stream<String>?
-    ) {
-        val context = LocalContext.current
-        var renderedText by remember(xmlContent, tagName) { mutableStateOf<String?>(null) }
-
-        LaunchedEffect(xmlContent, tagName) {
-            val manager = packageManager(context)
-            val hooks =
+    ): XmlRenderResult? {
+        val manager = packageManager(context)
+        val hooks =
+            withContext(Dispatchers.IO) {
+                manager.getToolPkgXmlRenderPlugins(tagName)
+            }
+        for (hook in hooks) {
+            val result =
                 withContext(Dispatchers.IO) {
-                    manager.getToolPkgXmlRenderPlugins(tagName)
+                    manager.runToolPkgMainHook(
+                        containerPackageName = hook.containerPackageName,
+                        functionName = hook.functionName,
+                        event = TOOLPKG_EVENT_XML_RENDER,
+                        pluginId = hook.pluginId,
+                        eventPayload =
+                            mapOf(
+                                "xmlContent" to xmlContent,
+                                "tagName" to tagName
+                            )
+                    )
                 }
-            var handledText: String? = null
-            for (hook in hooks) {
-                val result =
-                    withContext(Dispatchers.IO) {
-                        manager.runToolPkgMainHook(
-                            containerPackageName = hook.containerPackageName,
-                            functionName = hook.functionName,
-                            event = TOOLPKG_EVENT_XML_RENDER,
-                            pluginId = hook.pluginId,
-                            eventPayload =
-                                mapOf(
-                                    "xmlContent" to xmlContent,
-                                    "tagName" to tagName
-                                )
-                        )
-                    }
-                val value =
-                    result.getOrElse { error ->
+            val value =
+                result.getOrElse { error ->
+                    AppLogger.e(
+                        TAG,
+                        "ToolPkg xml render hook failed: ${hook.containerPackageName}:${hook.pluginId}",
+                        error
+                    )
+                    return@getOrElse null
+                } ?: continue
+            val decoded =
+                runCatching { decodeHookResult(value) }
+                    .getOrElse { error ->
                         AppLogger.e(
                             TAG,
-                            "ToolPkg xml render hook failed: ${hook.containerPackageName}:${hook.pluginId}",
+                            "ToolPkg xml render hook decode failed: ${hook.containerPackageName}:${hook.pluginId}",
                             error
                         )
-                        return@getOrElse null
-                    } ?: continue
-                val decoded =
-                    runCatching { decodeHookResult(value) }
-                        .getOrElse { error ->
-                            AppLogger.e(
-                                TAG,
-                                "ToolPkg xml render hook decode failed: ${hook.containerPackageName}:${hook.pluginId}",
-                                error
-                            )
-                            null
-                        }
-                val text = extractXmlRenderText(decoded)
-                if (!text.isNullOrBlank()) {
-                    handledText = text
-                    break
-                }
+                        null
+                    }
+            val parsed = parseXmlRenderHookObjectResult(decoded) ?: continue
+            if (parsed.handled == false) {
+                continue
             }
-            renderedText = handledText
+            val composeDsl = parsed.composeDsl
+            if (composeDsl != null) {
+                return XmlRenderResult.ComposeDslScreen(
+                    containerPackageName = hook.containerPackageName,
+                    screenPath = composeDsl.screen,
+                    state = composeDsl.state,
+                    memo = composeDsl.memo,
+                    moduleSpec = composeDsl.moduleSpec
+                )
+            }
+            val text = parsed.text?.ifBlank { parsed.content.orEmpty() }?.trim().orEmpty()
+            if (text.isNotBlank()) {
+                return XmlRenderResult.Text(text)
+            }
         }
+        return null
+    }
 
-        if (!renderedText.isNullOrBlank()) {
-            Text(
-                text = renderedText.orEmpty(),
-                color = textColor,
-                modifier = modifier
-            )
+    private fun parseXmlRenderHookObjectResult(decoded: Any?): ToolPkgXmlRenderHookObjectResult? {
+        return when (decoded) {
+            null -> null
+            is String -> {
+                val text = decoded.trim()
+                if (text.isBlank()) null else ToolPkgXmlRenderHookObjectResult(handled = true, text = text)
+            }
+            is JSONObject -> {
+                val handled = decoded.optBoolean("handled", true)
+                val text = decoded.optString("text").ifBlank { decoded.optString("content") }.trim()
+                val composeDslRaw = decoded.opt("composeDsl")
+                val composeDsl = parseComposeDslResult(composeDslRaw)
+                ToolPkgXmlRenderHookObjectResult(
+                    handled = handled,
+                    text = text.ifBlank { null },
+                    content = decoded.optString("content").trim().ifBlank { null },
+                    composeDsl = composeDsl
+                )
+            }
+            else -> null
         }
     }
 
-    private fun extractXmlRenderText(decoded: Any?): String? {
-        return when (decoded) {
-            null -> null
-            is String -> decoded.trim().ifBlank { null }
+    private fun parseComposeDslResult(raw: Any?): ToolPkgXmlRenderHookComposeDslResult? {
+        val map =
+            when (raw) {
+                is JSONObject -> raw
+                is Map<*, *> -> JSONObject(raw)
+                else -> null
+            } ?: return null
+
+        val screen = map.optString("screen").trim()
+        if (screen.isBlank()) {
+            return null
+        }
+
+        val state = asMap(map.opt("state"))
+        val memo = asMap(map.opt("memo"))
+        val moduleSpec = asMap(map.opt("moduleSpec"))
+
+        return ToolPkgXmlRenderHookComposeDslResult(
+            screen = screen,
+            state = state,
+            memo = memo,
+            moduleSpec = if (moduleSpec.isNotEmpty()) moduleSpec else null
+        )
+    }
+
+    private fun asMap(value: Any?): Map<String, Any?> {
+        return when (value) {
             is JSONObject -> {
-                val handled = decoded.optBoolean("handled", true)
-                if (!handled) {
-                    null
-                } else {
-                    decoded.optString("text").ifBlank { decoded.optString("content") }.trim().ifBlank { null }
+                val map = linkedMapOf<String, Any?>()
+                value.keys().forEach { key ->
+                    map[key] = normalizeValue(value.opt(key))
+                }
+                map
+            }
+            is Map<*, *> -> {
+                value.entries.associate { entry ->
+                    entry.key.toString() to normalizeValue(entry.value)
                 }
             }
-            else -> null
+            else -> emptyMap()
+        }
+    }
+
+    private fun asList(value: Any?): List<Any?> {
+        return when (value) {
+            is JSONArray -> {
+                buildList {
+                    for (index in 0 until value.length()) {
+                        add(normalizeValue(value.opt(index)))
+                    }
+                }
+            }
+            is List<*> -> value.map { normalizeValue(it) }
+            else -> emptyList()
+        }
+    }
+
+    private fun normalizeValue(value: Any?): Any? {
+        return when (value) {
+            null, JSONObject.NULL -> null
+            is JSONObject -> asMap(value)
+            is JSONArray -> asList(value)
+            else -> value
         }
     }
 }
@@ -276,12 +341,17 @@ private object ToolPkgInputMenuToggleBridgePlugin : InputMenuTogglePlugin {
             return emptyList()
         }
         return cachedSpecs.map { spec ->
+            val resolvedChecked = params.featureStates[spec.id] ?: spec.isChecked
             InputMenuToggleDefinition(
                 id = spec.id,
                 title = spec.title,
                 description = spec.description,
-                isChecked = spec.isChecked,
+                isChecked = resolvedChecked,
                 onToggle = {
+                    if (params.featureStates.containsKey(spec.id)) {
+                        params.onToggleFeature(spec.id)
+                        return@InputMenuToggleDefinition
+                    }
                     scope.launch {
                         val manager = packageManager(params.context)
                         manager.runToolPkgMainHook(

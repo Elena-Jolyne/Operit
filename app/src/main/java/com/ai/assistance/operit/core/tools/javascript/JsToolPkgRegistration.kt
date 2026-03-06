@@ -176,13 +176,27 @@ internal fun buildToolPkgRegistrationBridgeScript(): String {
             var resolvedFunction = '';
             var functionSource = '';
             if (typeof rawFunction === 'function') {
-                __operitToolPkgHookCounter += 1;
-                var hookIdPart = String(definition.id || 'hook').replace(/[^a-zA-Z0-9_$]/g, '_');
-                if (!hookIdPart) {
-                    hookIdPart = 'hook';
+                var exportsRef = window.__operit_current_module_exports;
+                if (exportsRef && typeof exportsRef === 'object') {
+                    var exportKeys = Object.keys(exportsRef);
+                    for (var i = 0; i < exportKeys.length; i += 1) {
+                        var exportKey = exportKeys[i];
+                        if (exportsRef[exportKey] === rawFunction) {
+                            resolvedFunction = exportKey;
+                            break;
+                        }
+                    }
                 }
-                resolvedFunction = "__operit_inline_hook_" + hookIdPart + "_" + __operitToolPkgHookCounter;
-                functionSource = String(rawFunction);
+
+                if (!resolvedFunction) {
+                    __operitToolPkgHookCounter += 1;
+                    var hookIdPart = String(definition.id || 'hook').replace(/[^a-zA-Z0-9_$]/g, '_');
+                    if (!hookIdPart) {
+                        hookIdPart = 'hook';
+                    }
+                    resolvedFunction = "__operit_inline_hook_" + hookIdPart + "_" + __operitToolPkgHookCounter;
+                    functionSource = String(rawFunction);
+                }
             }
 
             if (!resolvedFunction) {
@@ -210,13 +224,27 @@ internal fun buildToolPkgRegistrationBridgeScript(): String {
             var resolvedFunction = '';
             var functionSource = '';
             if (typeof rawFunction === 'function') {
-                __operitToolPkgHookCounter += 1;
-                var hookIdPart = String(definition.id || 'hook').replace(/[^a-zA-Z0-9_$]/g, '_');
-                if (!hookIdPart) {
-                    hookIdPart = 'hook';
+                var exportsRef = window.__operit_current_module_exports;
+                if (exportsRef && typeof exportsRef === 'object') {
+                    var exportKeys = Object.keys(exportsRef);
+                    for (var i = 0; i < exportKeys.length; i += 1) {
+                        var exportKey = exportKeys[i];
+                        if (exportsRef[exportKey] === rawFunction) {
+                            resolvedFunction = exportKey;
+                            break;
+                        }
+                    }
                 }
-                resolvedFunction = "__operit_inline_hook_" + hookIdPart + "_" + __operitToolPkgHookCounter;
-                functionSource = String(rawFunction);
+
+                if (!resolvedFunction) {
+                    __operitToolPkgHookCounter += 1;
+                    var hookIdPart = String(definition.id || 'hook').replace(/[^a-zA-Z0-9_$]/g, '_');
+                    if (!hookIdPart) {
+                        hookIdPart = 'hook';
+                    }
+                    resolvedFunction = "__operit_inline_hook_" + hookIdPart + "_" + __operitToolPkgHookCounter;
+                    functionSource = String(rawFunction);
+                }
             }
 
             if (!resolvedFunction) {
