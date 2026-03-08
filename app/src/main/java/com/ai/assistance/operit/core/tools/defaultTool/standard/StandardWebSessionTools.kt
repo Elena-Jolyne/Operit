@@ -1,18 +1,28 @@
 package com.ai.assistance.operit.core.tools.defaultTool.standard
 
+import android.app.DownloadManager
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Color as AndroidColor
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.util.Base64
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.webkit.CookieManager
+import android.webkit.DownloadListener
+import android.webkit.JavascriptInterface
+import android.webkit.URLUtil
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -23,6 +33,7 @@ import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -77,6 +88,10 @@ import com.ai.assistance.operit.data.model.AITool
 import com.ai.assistance.operit.data.model.ToolResult
 import com.ai.assistance.operit.util.AppLogger
 import java.io.File
+import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
@@ -206,6 +221,60 @@ private class WebSessionOverlayLifecycleOwner :
         @Volatile var hasSslError: Boolean = false
         @Volatile var pendingFileChooserCallback: ValueCallback<Array<Uri>>? = null
         @Volatile var lastFileChooserRequestAt: Long = 0L
+        @Volatile var lastDownloadEvent: WebDownloadEvent? = null
+        @Volatile var lastDownloadEventAt: Long = 0L
+    }
+
+    private data class WebDownloadEvent(
+        val status: String,
+        val type: String,
+        val fileName: String,
+        val url: String? = null,
+        val mimeType: String? = null,
+        val savedPath: String? = null,
+        val downloadId: Long? = null,
+        val error: String? = null
+    ) {
+        fun toJson(): JSONObject =
+            JSONObject()
+                .put("status", status)
+                .put("type", type)
+                .put("file_name", fileName)
+                .also { json ->
+                    if (!url.isNullOrBlank()) {
+                        json.put("url", url)
+                    }
+                    if (!mimeType.isNullOrBlank()) {
+                        json.put("mime_type", mimeType)
+                    }
+                    if (!savedPath.isNullOrBlank()) {
+                        json.put("saved_path", savedPath)
+                    }
+                    if (downloadId != null) {
+                        json.put("download_id", downloadId)
+                    }
+                    if (!error.isNullOrBlank()) {
+                        json.put("error", error)
+                    }
+                }
+    }
+
+    private inner class WebDownloadBridge(private val session: WebSession) {
+        @JavascriptInterface
+        fun downloadBase64(base64Data: String?, fileName: String?, mimeType: String?) {
+            handleInlineDownload(
+                session = session,
+                base64Data = base64Data.orEmpty(),
+                fileName = fileName.orEmpty(),
+                mimeType = mimeType.orEmpty(),
+                type = "inline"
+            )
+        }
+
+        @JavascriptInterface
+        fun log(message: String?) {
+            AppLogger.d(TAG, "web download bridge: ${message.orEmpty()}")
+        }
     }
 
     private data class OverlayController(
@@ -427,6 +496,7 @@ private class WebSessionOverlayLifecycleOwner :
         }
 
         val beforeUrl = readCurrentUrl(session.webView, session.currentUrl)
+        val downloadMarker = session.lastDownloadEventAt
         val jsResult =
             dispatchClickByRef(
                 webView = session.webView,
@@ -448,7 +518,13 @@ private class WebSessionOverlayLifecycleOwner :
             )
         }
 
-        waitForClickCompletion(session.webView, beforeUrl)
+        val downloadEvent = waitForClickCompletion(session, beforeUrl, downloadMarker)
+        if (downloadEvent?.status == "failed") {
+            return error(
+                tool.name,
+                "Click triggered a download, but it failed: ${downloadEvent.error ?: downloadEvent.fileName}"
+            )
+        }
 
         val payload =
             JSONObject()
@@ -463,6 +539,9 @@ private class WebSessionOverlayLifecycleOwner :
         }
         if (!element.isNullOrBlank()) {
             payload.put("element", element)
+        }
+        if (downloadEvent != null) {
+            payload.put("download", downloadEvent.toJson())
         }
 
         return ok(tool.name, payload)
@@ -505,6 +584,7 @@ private class WebSessionOverlayLifecycleOwner :
                         return JSON.stringify({ ok: false, error: "ref_not_found", ref: refValue });
                     }
                     const target = list[0];
+                    const anchor = target.closest('a[href]');
                     try { target.scrollIntoView({ block: "center", inline: "center" }); } catch (_) {}
                     const rect = target.getBoundingClientRect();
                     const x = rect.left + rect.width / 2;
@@ -547,7 +627,17 @@ private class WebSessionOverlayLifecycleOwner :
                         emit("click", detail);
                     }
 
-                    if (${if (doubleClick) "true" else "false"}) {
+                    let activationMethod = "mouse_event";
+                    let activationTag = String(target.tagName || "").toLowerCase();
+                    const nativeAnchorClickEligible = !${if (doubleClick) "true" else "false"} &&
+                        buttonValue === 0 && !altKey && !ctrlKey && !metaKey && !shiftKey &&
+                        !!anchor && typeof anchor.click === "function";
+
+                    if (nativeAnchorClickEligible) {
+                        activationMethod = "native_anchor_click";
+                        activationTag = String(anchor.tagName || "").toLowerCase();
+                        anchor.click();
+                    } else if (${if (doubleClick) "true" else "false"}) {
                         clickOnce(1);
                         clickOnce(2);
                         emit("dblclick", 2);
@@ -560,7 +650,10 @@ private class WebSessionOverlayLifecycleOwner :
                         ref: refValue,
                         button: ${quoteJs(button)},
                         doubleClick: ${if (doubleClick) "true" else "false"},
-                        tag: String(target.tagName || "").toLowerCase()
+                        tag: String(target.tagName || "").toLowerCase(),
+                        activationMethod,
+                        activationTag,
+                        href: anchor ? String(anchor.href || "") : ""
                     });
                 } catch (e) {
                     return JSON.stringify({ ok: false, error: String(e) });
@@ -617,16 +710,26 @@ private class WebSessionOverlayLifecycleOwner :
         }.getOrDefault(fallback)
     }
 
-    private fun waitForClickCompletion(webView: WebView, beforeUrl: String) {
-        Thread.sleep(500)
+    private fun waitForClickCompletion(
+        session: WebSession,
+        beforeUrl: String,
+        downloadMarker: Long
+    ): WebDownloadEvent? {
+        Thread.sleep(350)
         val deadline = System.currentTimeMillis() + 10_000L
+        val readyWithoutNavigationGraceDeadline = System.currentTimeMillis() + 1_500L
         var urlChanged = false
 
         while (System.currentTimeMillis() < deadline) {
+            val latestDownload = session.lastDownloadEvent
+            if (latestDownload != null && session.lastDownloadEventAt > downloadMarker) {
+                return latestDownload
+            }
+
             try {
                 val raw =
                     evaluateJavascriptSync(
-                        webView,
+                        session.webView,
                         "(function(){ return JSON.stringify({ url: String(location.href || ''), ready: String(document.readyState || '') }); })();",
                         2_000L
                     )
@@ -641,18 +744,20 @@ private class WebSessionOverlayLifecycleOwner :
 
                 if (urlChanged && ready == "complete") {
                     Thread.sleep(500)
-                    return
+                    return session.lastDownloadEvent?.takeIf { session.lastDownloadEventAt > downloadMarker }
                 }
 
-                if (!urlChanged && ready == "complete") {
-                    return
+                if (!urlChanged && ready == "complete" && System.currentTimeMillis() >= readyWithoutNavigationGraceDeadline) {
+                    return session.lastDownloadEvent?.takeIf { session.lastDownloadEventAt > downloadMarker }
                 }
             } catch (_: Exception) {
-                return
+                return session.lastDownloadEvent?.takeIf { session.lastDownloadEventAt > downloadMarker }
             }
 
             Thread.sleep(120)
         }
+
+        return session.lastDownloadEvent?.takeIf { session.lastDownloadEventAt > downloadMarker }
     }
 
     private fun webFill(tool: AITool): ToolResult {
@@ -997,6 +1102,8 @@ private class WebSessionOverlayLifecycleOwner :
             isClickable = true
             isLongClickable = true
             contentDescription = context.getString(R.string.web_session_accessibility_web_content)
+            addJavascriptInterface(WebDownloadBridge(session), "OperitWebDownloadBridge")
+            setDownloadListener(createDownloadListener(session))
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 isScreenReaderFocusable = true
             }
@@ -1041,12 +1148,27 @@ private class WebSessionOverlayLifecycleOwner :
                     session.currentUrl = url
                     session.pageTitle = view.title ?: ""
                     session.pageLoaded = true
+                    injectDownloadHelper(view)
                     refreshSessionUiOnMain(session.id)
                 }
 
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                     val uri = request.url
                     val scheme = uri.scheme?.lowercase()
+                    if (scheme == "blob") {
+                        injectBlobDownloaderScript(session, uri.toString())
+                        return true
+                    }
+                    if (scheme == "data") {
+                        handleInlineDownload(
+                            session = session,
+                            base64Data = uri.toString(),
+                            fileName = "download_${System.currentTimeMillis()}",
+                            mimeType = guessMimeTypeFromDataUrl(uri.toString()),
+                            type = "data"
+                        )
+                        return true
+                    }
                     if (scheme != "http" && scheme != "https") {
                         AppLogger.w(TAG, "Blocked non-http(s) navigation: $uri")
                         return true
@@ -1818,6 +1940,461 @@ private class WebSessionOverlayLifecycleOwner :
             webView.destroy()
         } catch (e: Exception) {
             AppLogger.w(TAG, "Error during WebView cleanup: ${e.message}")
+        }
+    }
+
+    private fun createDownloadListener(session: WebSession): DownloadListener {
+        return DownloadListener { url, userAgent, contentDisposition, mimetype, _ ->
+            try {
+                when {
+                    url.startsWith("blob:") -> {
+                        injectBlobDownloaderScript(session, url)
+                    }
+
+                    url.startsWith("data:") -> {
+                        handleInlineDownload(
+                            session = session,
+                            base64Data = url,
+                            fileName = "",
+                            mimeType = guessMimeTypeFromDataUrl(url).ifBlank { mimetype.orEmpty() },
+                            type = "data"
+                        )
+                    }
+
+                    else -> {
+                        handleRegularDownload(
+                            session = session,
+                            url = url,
+                            userAgent = userAgent,
+                            contentDisposition = contentDisposition,
+                            mimeType = mimetype
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                recordDownloadEvent(
+                    session,
+                    WebDownloadEvent(
+                        status = "failed",
+                        type =
+                            when {
+                                url.startsWith("blob:") -> "blob"
+                                url.startsWith("data:") -> "data"
+                                else -> "http"
+                            },
+                        fileName =
+                            if (url.startsWith("data:") || url.startsWith("blob:")) {
+                                resolveInlineDownloadFileName("", mimetype.orEmpty().ifBlank { guessMimeTypeFromDataUrl(url) })
+                            } else {
+                                sanitizeFileName(URLUtil.guessFileName(url, contentDisposition, mimetype))
+                            },
+                        url = url,
+                        mimeType = mimetype,
+                        error = e.message ?: "download_failed"
+                    )
+                )
+                AppLogger.e(TAG, "Download failed for session=${session.id}: ${e.message}", e)
+                mainHandler.post {
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.download_failed, e.message ?: url),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+        }
+    }
+
+    private fun handleRegularDownload(
+        session: WebSession,
+        url: String,
+        userAgent: String,
+        contentDisposition: String?,
+        mimeType: String?
+    ) {
+        val fileName = sanitizeFileName(URLUtil.guessFileName(url, contentDisposition, mimeType))
+        val destinationFile =
+            File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                fileName
+            )
+
+        val request = DownloadManager.Request(Uri.parse(url)).apply {
+            setMimeType(mimeType)
+            addRequestHeader("User-Agent", userAgent)
+            setTitle(fileName)
+            setDescription(context.getString(R.string.download_file_description))
+            setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+        }
+
+        CookieManager.getInstance().getCookie(url)?.takeIf { it.isNotBlank() }?.let {
+            request.addRequestHeader("Cookie", it)
+        }
+
+        val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        val downloadId = downloadManager.enqueue(request)
+
+        recordDownloadEvent(
+            session,
+            WebDownloadEvent(
+                status = "started",
+                type = "http",
+                fileName = fileName,
+                url = url,
+                mimeType = mimeType,
+                savedPath = destinationFile.absolutePath,
+                downloadId = downloadId
+            )
+        )
+
+        mainHandler.post {
+            Toast.makeText(
+                context,
+                context.getString(R.string.download_started, fileName),
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+
+        val receiver =
+            object : BroadcastReceiver() {
+                override fun onReceive(receiverContext: Context?, intent: Intent?) {
+                    val completedId = intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L) ?: -1L
+                    if (completedId != downloadId) {
+                        return
+                    }
+
+                    runCatching {
+                        val cursor = downloadManager.query(DownloadManager.Query().setFilterById(downloadId))
+                        cursor.use {
+                            if (!it.moveToFirst()) {
+                                recordDownloadEvent(
+                                    session,
+                                    WebDownloadEvent(
+                                        status = "failed",
+                                        type = "http",
+                                        fileName = fileName,
+                                        url = url,
+                                        mimeType = mimeType,
+                                        savedPath = destinationFile.absolutePath,
+                                        downloadId = downloadId,
+                                        error = "download_query_failed"
+                                    )
+                                )
+                                return@use
+                            }
+
+                            val statusIndex = it.getColumnIndex(DownloadManager.COLUMN_STATUS)
+                            val reasonIndex = it.getColumnIndex(DownloadManager.COLUMN_REASON)
+                            val localUriIndex = it.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI)
+                            val status =
+                                if (statusIndex >= 0) it.getInt(statusIndex) else DownloadManager.STATUS_FAILED
+                            val localUri = if (localUriIndex >= 0) it.getString(localUriIndex) else null
+                            val resolvedPath = Uri.parse(localUri ?: "").path ?: destinationFile.absolutePath
+
+                            if (status == DownloadManager.STATUS_SUCCESSFUL) {
+                                recordDownloadEvent(
+                                    session,
+                                    WebDownloadEvent(
+                                        status = "completed",
+                                        type = "http",
+                                        fileName = fileName,
+                                        url = url,
+                                        mimeType = mimeType,
+                                        savedPath = resolvedPath,
+                                        downloadId = downloadId
+                                    )
+                                )
+                                mainHandler.post {
+                                    Toast.makeText(
+                                        context,
+                                        context.getString(R.string.download_complete, fileName),
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            } else {
+                                val reason = if (reasonIndex >= 0) it.getInt(reasonIndex).toString() else "unknown"
+                                recordDownloadEvent(
+                                    session,
+                                    WebDownloadEvent(
+                                        status = "failed",
+                                        type = "http",
+                                        fileName = fileName,
+                                        url = url,
+                                        mimeType = mimeType,
+                                        savedPath = resolvedPath,
+                                        downloadId = downloadId,
+                                        error = "DownloadManager status=$status reason=$reason"
+                                    )
+                                )
+                                mainHandler.post {
+                                    Toast.makeText(
+                                        context,
+                                        context.getString(R.string.download_incomplete, fileName),
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        }
+                    }.onFailure { error ->
+                        recordDownloadEvent(
+                            session,
+                            WebDownloadEvent(
+                                status = "failed",
+                                type = "http",
+                                fileName = fileName,
+                                url = url,
+                                mimeType = mimeType,
+                                savedPath = destinationFile.absolutePath,
+                                downloadId = downloadId,
+                                error = error.message ?: "download_complete_receiver_failed"
+                            )
+                        )
+                    }
+
+                    runCatching { context.unregisterReceiver(this) }
+                }
+            }
+
+        val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            context.registerReceiver(receiver, filter)
+        }
+    }
+
+    private fun injectDownloadHelper(webView: WebView) {
+        val script =
+            """
+            (function() {
+                if (window.__operitDownloadHelperInjected) {
+                    return;
+                }
+                window.__operitDownloadHelperInjected = true;
+
+                function guessName(anchor) {
+                    if (!anchor) return "";
+                    const raw = String(anchor.getAttribute("download") || "").trim();
+                    if (raw) return raw;
+                    try {
+                        const url = String(anchor.href || "");
+                        if (!url) return "";
+                        const pathname = new URL(url, location.href).pathname || "";
+                        const last = pathname.split("/").filter(Boolean).pop() || "";
+                        return decodeURIComponent(last || "");
+                    } catch (_) {
+                        return "";
+                    }
+                }
+
+                function downloadBlob(blobUrl, fileName) {
+                    fetch(blobUrl)
+                        .then((response) => response.blob())
+                        .then((blob) => new Promise((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onload = function() {
+                                resolve({ data: String(reader.result || ""), type: String(blob.type || "") });
+                            };
+                            reader.onerror = function() {
+                                reject(reader.error || new Error("blob_reader_failed"));
+                            };
+                            reader.readAsDataURL(blob);
+                        }))
+                        .then((payload) => {
+                            window.OperitWebDownloadBridge.downloadBase64(payload.data, fileName || "", payload.type || "application/octet-stream");
+                        })
+                        .catch((error) => {
+                            window.OperitWebDownloadBridge.log("blob download failed: " + String(error || "unknown"));
+                        });
+                }
+
+                document.addEventListener("click", function(event) {
+                    const anchor = event.target && event.target.closest ? event.target.closest("a[href]") : null;
+                    if (!anchor) {
+                        return;
+                    }
+                    const href = String(anchor.href || "");
+                    if (!href) {
+                        return;
+                    }
+                    const fileName = guessName(anchor);
+                    if (href.startsWith("blob:")) {
+                        event.preventDefault();
+                        downloadBlob(href, fileName);
+                    } else if (href.startsWith("data:")) {
+                        event.preventDefault();
+                        const mimeType = href.slice(5).split(";")[0] || "application/octet-stream";
+                        window.OperitWebDownloadBridge.downloadBase64(href, fileName || "", mimeType);
+                    }
+                }, true);
+            })();
+            """.trimIndent()
+
+        runCatching { webView.evaluateJavascript(script, null) }
+            .onFailure { AppLogger.w(TAG, "Failed to inject download helper: ${it.message}") }
+    }
+
+    private fun injectBlobDownloaderScript(session: WebSession, blobUrl: String) {
+        val script =
+            """
+            (function() {
+                fetch(${quoteJs(blobUrl)})
+                    .then((response) => response.blob())
+                    .then((blob) => new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = function() {
+                            resolve({ data: String(reader.result || ""), type: String(blob.type || "") });
+                        };
+                        reader.onerror = function() {
+                            reject(reader.error || new Error("blob_reader_failed"));
+                        };
+                        reader.readAsDataURL(blob);
+                    }))
+                    .then((payload) => {
+                        window.OperitWebDownloadBridge.downloadBase64(
+                            payload.data,
+                            "download_${System.currentTimeMillis()}",
+                            payload.type || "application/octet-stream"
+                        );
+                    })
+                    .catch((error) => {
+                        window.OperitWebDownloadBridge.log("blob downloader script failed: " + String(error || "unknown"));
+                    });
+            })();
+            """.trimIndent()
+
+        runCatching { evaluateJavascriptSync(session.webView, script, DEFAULT_TIMEOUT_MS.coerceIn(2_000L, 8_000L)) }
+            .onFailure {
+                recordDownloadEvent(
+                    session,
+                    WebDownloadEvent(
+                        status = "failed",
+                        type = "blob",
+                        fileName = "download_${System.currentTimeMillis()}",
+                        url = blobUrl,
+                        error = it.message ?: "blob_download_script_failed"
+                    )
+                )
+            }
+    }
+
+    private fun handleInlineDownload(
+        session: WebSession,
+        base64Data: String,
+        fileName: String,
+        mimeType: String,
+        type: String
+    ) {
+        runCatching {
+            val normalizedMimeType = mimeType.ifBlank { guessMimeTypeFromDataUrl(base64Data) }
+            val resolvedFileName = resolveInlineDownloadFileName(fileName, normalizedMimeType)
+            val downloadsDir =
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            if (!downloadsDir.exists()) {
+                downloadsDir.mkdirs()
+            }
+            val targetFile = File(downloadsDir, resolvedFileName)
+
+            val payload = base64Data.substringAfter(',', base64Data)
+            val bytes = Base64.decode(payload, Base64.DEFAULT)
+            FileOutputStream(targetFile).use { it.write(bytes) }
+
+            recordDownloadEvent(
+                session,
+                WebDownloadEvent(
+                    status = "completed",
+                    type = type,
+                    fileName = resolvedFileName,
+                    mimeType = normalizedMimeType,
+                    savedPath = targetFile.absolutePath
+                )
+            )
+
+            mainHandler.post {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.download_success, resolvedFileName),
+                    Toast.LENGTH_SHORT
+                ).show()
+                context.sendBroadcast(Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE).apply {
+                    data = Uri.fromFile(targetFile)
+                })
+            }
+        }.onFailure { error ->
+            val resolvedFileName = resolveInlineDownloadFileName(fileName, mimeType)
+            recordDownloadEvent(
+                session,
+                WebDownloadEvent(
+                    status = "failed",
+                    type = type,
+                    fileName = resolvedFileName,
+                    mimeType = mimeType,
+                    error = error.message ?: "inline_download_failed"
+                )
+            )
+            mainHandler.post {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.download_failed, error.message ?: resolvedFileName),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    private fun recordDownloadEvent(session: WebSession, event: WebDownloadEvent) {
+        session.lastDownloadEvent = event
+        session.lastDownloadEventAt = System.currentTimeMillis()
+        AppLogger.d(
+            TAG,
+            "web download event session=${session.id}, status=${event.status}, type=${event.type}, file=${event.fileName}, url=${event.url.orEmpty()}"
+        )
+    }
+
+    private fun guessMimeTypeFromDataUrl(dataUrl: String): String {
+        if (!dataUrl.startsWith("data:")) {
+            return "application/octet-stream"
+        }
+        return dataUrl.substringAfter("data:", "")
+            .substringBefore(';', "application/octet-stream")
+            .ifBlank { "application/octet-stream" }
+    }
+
+    private fun resolveInlineDownloadFileName(fileName: String, mimeType: String): String {
+        val trimmed = fileName.trim()
+        if (trimmed.isNotBlank()) {
+            return sanitizeFileName(trimmed)
+        }
+        return sanitizeFileName(
+            "download_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())}${determineExtensionFromMimeType(mimeType)}"
+        )
+    }
+
+    private fun determineExtensionFromMimeType(mimeType: String): String {
+        val lowerMimeType = mimeType.lowercase(Locale.ROOT)
+        return when {
+            lowerMimeType.startsWith("image/") -> ".${lowerMimeType.substringAfter('/')}"
+            lowerMimeType.startsWith("audio/") -> ".${lowerMimeType.substringAfter('/')}"
+            lowerMimeType.startsWith("video/") -> ".${lowerMimeType.substringAfter('/')}"
+            lowerMimeType.contains("pdf") -> ".pdf"
+            lowerMimeType.contains("json") -> ".json"
+            lowerMimeType.contains("xml") -> ".xml"
+            lowerMimeType.contains("csv") -> ".csv"
+            lowerMimeType.contains("zip") -> ".zip"
+            lowerMimeType.contains("html") -> ".html"
+            lowerMimeType.contains("javascript") -> ".js"
+            lowerMimeType.contains("plain") -> ".txt"
+            else -> ".bin"
+        }
+    }
+
+    private fun sanitizeFileName(fileName: String): String {
+        val sanitized = fileName.replace("[\\\\/:*?\"<>|]".toRegex(), "_").trim()
+        return if (sanitized.isBlank()) {
+            "download_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())}"
+        } else {
+            sanitized
         }
     }
 

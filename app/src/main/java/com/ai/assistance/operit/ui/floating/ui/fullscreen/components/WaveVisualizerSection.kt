@@ -100,6 +100,7 @@ fun WaveVisualizerSection(
         if (showAiLoadingEffect) {
             AiLoadingWaveOverlay(
                 modifier = Modifier.size(avatarSize * 1.72f),
+                avatarDiameterRatio = 1f / 1.72f,
                 primaryColor = colors.primary,
                 accentColor = colors.tertiary
             )
@@ -136,6 +137,7 @@ fun WaveVisualizerSection(
 @Composable
 private fun AiLoadingWaveOverlay(
     modifier: Modifier = Modifier,
+    avatarDiameterRatio: Float,
     primaryColor: Color,
     accentColor: Color
 ) {
@@ -177,11 +179,11 @@ private fun AiLoadingWaveOverlay(
 
     Canvas(modifier = modifier) {
         val center = Offset(size.width / 2f, size.height / 2f)
-        val baseRadius = size.minDimension * 0.19f
-        val haloRadius = baseRadius * 1.75f * breathe
-        val outerRadius = baseRadius * 1.28f
-        val innerRadius = baseRadius * 1.06f
-        val strokeWidth = size.minDimension * 0.015f
+        val avatarRadius = size.minDimension * avatarDiameterRatio * 0.5f
+        val haloRadius = avatarRadius * 1.55f * breathe
+        val outerRadius = avatarRadius * 1.28f
+        val innerRadius = avatarRadius * 1.10f
+        val strokeWidth = size.minDimension * 0.017f
 
         drawCircle(
             brush = Brush.radialGradient(
@@ -232,7 +234,7 @@ private fun AiLoadingWaveOverlay(
 
         listOf(0f, 120f, 240f).forEachIndexed { index, baseAngle ->
             val angle = Math.toRadians((baseAngle + rotation * (if (index % 2 == 0) 1f else -0.75f)).toDouble())
-            val orbitRadius = baseRadius * (1.16f + index * 0.08f)
+            val orbitRadius = avatarRadius * (1.18f + index * 0.11f)
             val dotCenter = Offset(
                 x = center.x + cos(angle).toFloat() * orbitRadius,
                 y = center.y + sin(angle).toFloat() * orbitRadius
@@ -243,7 +245,7 @@ private fun AiLoadingWaveOverlay(
                 } else {
                     primaryColor.copy(alpha = 0.18f + pulse * 0.24f)
                 },
-                radius = baseRadius * (0.055f + index * 0.008f),
+                radius = avatarRadius * (0.08f + index * 0.012f),
                 center = dotCenter
             )
         }

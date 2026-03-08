@@ -1,99 +1,90 @@
-# API 文档: `jimp.d.ts`
+# API 文档：`jimp.d.ts`
 
-本文档详细介绍了 `jimp.d.ts` 文件中定义的 API。它提供了 [Jimp](https://github.com/oliver-moran/jimp) 图像处理库的一个子集，通过原生桥接实现，允许在脚本中执行基本的图像操作。
+`jimp.d.ts` 描述的是全局 `Jimp` 对象当前在运行环境中可用的桥接能力。它是一个轻量子集，重点覆盖基础图片读写与简单图像处理。
 
-## 概述
+## 作用
 
-所有图像处理功能都通过一个全局的 `Jimp` 对象提供。你可以用它来读取、创建、修改和导出图片。核心概念是 `JimpWrapper` 对象，它代表一个被加载到内存中的图像实例。
+当前定义支持：
 
--   **`Jimp.read`**: 从 Base64 字符串中读取图像。
--   **`Jimp.create`**: 创建一个指定尺寸的空白图像。
--   **`JimpWrapper`**: 图像实例，提供裁剪、合成、获取尺寸和导出等方法。
+- 从 Base64 读取图片。
+- 创建空白图片。
+- 裁剪与合成。
+- 导出为 Base64。
+- 手动释放桥接对象。
 
----
+## 全局对象
 
-## `Jimp` 对象详解
+```ts
+Jimp
+```
 
-### `Jimp.read(base64: string): Promise<JimpWrapper>`
+可以直接使用，无需 `import`。
 
-从一个 Base64 编码的字符串中异步读取图像数据，并返回一个 `JimpWrapper` 实例。
+## 核心类型
 
--   **`base64`**: 包含图像数据的 Base64 字符串 (不含 data URI 前缀，如 `data:image/png;base64,`)。
--   **返回值**: 一个 `Promise`，成功时解析为一个可供操作的 `JimpWrapper` 对象。
+### `Jimp.JimpWrapper`
 
-### `Jimp.create(w: number, h: number): Promise<JimpWrapper>`
+桥接后的图片对象，包含以下方法：
 
-创建一个指定宽度和高度的空白（通常是黑色）图像。
+- `crop(x, y, w, h)`：裁剪并返回新的 `JimpWrapper`。
+- `composite(src, x, y)`：把另一张图叠加到当前图上。
+- `getWidth()`：获取宽度。
+- `getHeight()`：获取高度。
+- `getBase64(mime)`：导出为 Base64 字符串。
+- `release()`：释放底层资源。
 
--   **`w`**: 图像的宽度（像素）。
--   **`h`**: 图像的高度（像素）。
--   **返回值**: 一个 `Promise`，成功时解析为一个新的 `JimpWrapper` 对象。
+### `Jimp.read(base64)`
 
-### `Jimp` 常量
+```ts
+read(base64: string): Promise<JimpWrapper>
+```
 
--   `Jimp.MIME_JPEG`: 字符串常量 `'image/jpeg'`。
--   `Jimp.MIME_PNG`: 字符串常量 `'image/png'`。
+从 Base64 内容创建图片对象。
 
----
+### `Jimp.create(w, h)`
 
-## `JimpWrapper` 类详解
+```ts
+create(w: number, h: number): Promise<JimpWrapper>
+```
 
-这是一个图像的包装器实例，在你通过 `Jimp.read` 或 `Jimp.create` 获得它之后，就可以调用以下方法进行操作。
+创建一张空白图片。
 
-### 方法
+### MIME 常量
 
--   `crop(x: number, y: number, w: number, h: number): Promise<JimpWrapper>`:
-    裁剪图像。返回一个新的、代表裁剪后区域的 `JimpWrapper` 实例。
-    -   `(x, y)`: 裁剪区域左上角的坐标。
-    -   `(w, h)`: 裁剪区域的宽度和高度。
+- `Jimp.MIME_JPEG`
+- `Jimp.MIME_PNG`
 
--   `composite(src: JimpWrapper, x: number, y: number): Promise<this>`:
-    将另一张图片 (`src`) 合成（粘贴）到当前图片上。
-    -   `src`: 要合成的源 `JimpWrapper` 图像。
-    -   `(x, y)`: 在当前图片上开始粘贴的左上角坐标。
-    -   **返回值**: 返回 `this`，允许链式调用。
+## 示例
 
--   `getWidth(): Promise<number>`:
-    获取图像的宽度。
+### 读取图片并裁剪
 
--   `getHeight(): Promise<number>`:
-    获取图像的高度。
+```ts
+const image = await Jimp.read(base64Image);
+const cropped = await image.crop(0, 0, 200, 200);
+const output = await cropped.getBase64(Jimp.MIME_PNG);
+await image.release();
+await cropped.release();
+```
 
--   `getBase64(mime: string): Promise<string>`:
-    将当前图像编码为 Base64 字符串。
-    -   `mime`: 图像的 MIME 类型，应使用 `Jimp.MIME_JPEG` 或 `Jimp.MIME_PNG`。
+### 创建画布并叠加图片
 
--   `release(): Promise<void>`:
-    **（重要）** 释放与此图像实例关联的底层原生资源。当你完成对一个 `JimpWrapper` 对象的所有操作后，应调用此方法以避免内存泄漏。
+```ts
+const canvas = await Jimp.create(800, 600);
+const icon = await Jimp.read(iconBase64);
+await canvas.composite(icon, 24, 24);
+const merged = await canvas.getBase64(Jimp.MIME_PNG);
+await icon.release();
+await canvas.release();
+```
 
-**示例: 裁剪并保存图片**
-```typescript
-async function cropImage() {
-    // 假设 base64ImageString 是一个 PNG 图片的 Base64 字符串
-    const base64ImageString = "...";
+## 使用建议
 
-    let image = null;
-    let croppedImage = null;
-    try {
-        image = await Jimp.read(base64ImageString);
-        
-        // 从 (10, 20) 坐标开始，裁剪一个 100x150 的区域
-        croppedImage = await image.crop(10, 20, 100, 150);
-        
-        // 获取裁剪后图片的 Base64
-        const croppedBase64 = await croppedImage.getBase64(Jimp.MIME_PNG);
-        
-        // 可以将 croppedBase64 写入文件
-        await Tools.Files.writeBinary("/sdcard/Pictures/cropped_image.png", croppedBase64);
+- `JimpWrapper` 背后是桥接对象，使用完后尽量调用 `release()`。
+- 输入是 Base64，不是文件路径；如果你手头是文件，可以先配合 `Tools.Files.readBinary()` 获取内容。
+- 文档只覆盖 `examples/types/jimp.d.ts` 里明确声明的方法，不应假设存在完整版 Jimp 的所有 API。
 
-        complete({ success: true, message: "图片裁剪成功！" });
+## 相关文件
 
-    } catch (error) {
-        complete({ success: false, message: `图片处理失败: ${error.message}` });
-    } finally {
-        // 确保释放所有 Jimp 对象的内存
-        if (image) await image.release();
-        if (croppedImage) await croppedImage.release();
-    }
-}
-``` 
+- `examples/types/jimp.d.ts`
+- `examples/types/files.d.ts`
+- `examples/types/index.d.ts`

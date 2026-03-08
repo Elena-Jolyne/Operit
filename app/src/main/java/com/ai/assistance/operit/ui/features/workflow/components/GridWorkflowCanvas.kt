@@ -34,6 +34,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ai.assistance.operit.core.workflow.NodeExecutionState
@@ -72,9 +73,6 @@ fun GridWorkflowCanvas(
     val cellSizePx = with(density) { cellSize.toPx() }
     val nodeWidthPx = with(density) { NODE_WIDTH.toPx() }
     val nodeHeightPx = with(density) { NODE_HEIGHT.toPx() }
-    val canvasWidthPx = with(density) { CANVAS_WIDTH.toPx() }
-    val canvasHeightPx = with(density) { CANVAS_HEIGHT.toPx() }
-
     val nodeById = remember(nodes) { nodes.associateBy { it.id } }
 
     val referenceEdges = remember(nodes) {
@@ -211,11 +209,49 @@ fun GridWorkflowCanvas(
     // 画布缩放和平移状态
     var scale by remember { mutableStateOf(1f) }
     var panOffset by remember { mutableStateOf(Offset.Zero) }
+    var viewportSize by remember { mutableStateOf(IntSize.Zero) }
+    val nodeIds = remember(nodes) { nodes.map { it.id } }
+    var hasAutoFitted by remember(nodeIds) { mutableStateOf(false) }
+    val fitPaddingPx = with(density) { 48.dp.toPx() }
+
+    fun fitViewportToNodes() {
+        if (viewportSize == IntSize.Zero || nodePositions.isEmpty()) return
+
+        val minX = nodePositions.values.minOf { it.x }
+        val minY = nodePositions.values.minOf { it.y }
+        val maxX = nodePositions.values.maxOf { it.x + nodeWidthPx }
+        val maxY = nodePositions.values.maxOf { it.y + nodeHeightPx }
+
+        val contentWidth = (maxX - minX).coerceAtLeast(nodeWidthPx)
+        val contentHeight = (maxY - minY).coerceAtLeast(nodeHeightPx)
+        val availableWidth = (viewportSize.width.toFloat() - fitPaddingPx * 2).coerceAtLeast(1f)
+        val availableHeight = (viewportSize.height.toFloat() - fitPaddingPx * 2).coerceAtLeast(1f)
+        val targetScale = minOf(
+            availableWidth / contentWidth,
+            availableHeight / contentHeight
+        ).coerceIn(0.25f, 3f)
+
+        scale = targetScale
+        panOffset = Offset(
+            x = (viewportSize.width.toFloat() - contentWidth * targetScale) / 2f - minX * targetScale,
+            y = (viewportSize.height.toFloat() - contentHeight * targetScale) / 2f - minY * targetScale
+        )
+    }
+
+    LaunchedEffect(viewportSize, nodeIds, hasAutoFitted) {
+        if (!hasAutoFitted && viewportSize != IntSize.Zero && nodePositions.isNotEmpty()) {
+            fitViewportToNodes()
+            hasAutoFitted = true
+        }
+    }
 
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFFF8F9FA))
+            .onGloballyPositioned { coordinates ->
+                viewportSize = coordinates.size
+            }
             .pointerInput(Unit) {
                 // 检测双指缩放和平移手势
                 detectTransformGestures { centroid, pan, zoom, rotation ->
@@ -231,12 +267,41 @@ fun GridWorkflowCanvas(
                 // 检测双击重置视图
                 detectTapGestures(
                     onDoubleTap = {
-                        scale = 1f
-                        panOffset = Offset.Zero
+                        fitViewportToNodes()
                     }
                 )
             }
     ) {
+        Canvas(
+            modifier = Modifier.matchParentSize()
+        ) {
+            val scaledCellSize = cellSizePx * scale
+            if (scaledCellSize <= 0f) return@Canvas
+
+            val gridDotColor = Color(0xFF888888)
+            val startX = ((panOffset.x % scaledCellSize) + scaledCellSize) % scaledCellSize
+            val startY = ((panOffset.y % scaledCellSize) + scaledCellSize) % scaledCellSize
+            val points = mutableListOf<Offset>()
+
+            var x = startX
+            while (x <= size.width) {
+                var y = startY
+                while (y <= size.height) {
+                    points.add(Offset(x, y))
+                    y += scaledCellSize
+                }
+                x += scaledCellSize
+            }
+
+            drawPoints(
+                points = points,
+                pointMode = PointMode.Points,
+                color = gridDotColor,
+                strokeWidth = 6f * scale,
+                cap = StrokeCap.Round
+            )
+        }
+
         Box(
             modifier = Modifier
                 .width(CANVAS_WIDTH)

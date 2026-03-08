@@ -1,70 +1,284 @@
-# API 文档: `results.d.ts`
+# API 文档：`results.d.ts`
 
-本文档旨在解释 `results.d.ts` 文件在脚本类型系统中的作用。这个文件本身不定义任何可执行的 API 或函数，它的唯一职责是**定义所有工具成功执行后返回的数据对象的 TypeScript 接口（Interface）**。
+`results.d.ts` 是所有工具返回结构的集中定义。它本身不提供运行时方法，但几乎所有 `Tools.*`、`toolCall()` 和部分全局对象最终都会返回这里定义的数据类型。
 
-## 核心职责
+## 作用
 
-`results.d.ts` 是类型系统的基石之一。它为每个工具的输出提供了具体、严格的类型定义。这确保了当你在脚本中接收工具的返回结果时，可以获得准确的类型信息。
+这份文件主要承担两类职责：
 
-**主要内容:**
+- 定义 `...Data` 形式的原始结果结构。
+- 定义 `...Result` 形式的包装结果，其中通常包含 `BaseResult` 与 `data` 字段。
 
-1.  **定义基础接口**:
-    -   `BaseResult`: 这是一个所有结果类型都隐式包含的基础接口，通常定义了 `success: boolean` 和 `error?: string` 字段。
+## 命名约定
 
-2.  **为每个工具的返回数据定义具体接口**:
-    该文件为各种操作（文件、网络、UI、系统等）可能返回的数据结构定义了详细的接口。
+### `...Data`
 
-    **示例 (`FileContentData` 和 `HttpResponseData`):**
-    ```typescript
-    // 文件读取结果的数据结构
-    export interface FileContentData {
-        path: string;
-        content: string;
-        size: number;
-        toString(): string;
-    }
+表示某个工具或能力的返回数据主体，例如：
 
-    // HTTP 请求结果的数据结构
-    export interface HttpResponseData {
-        url: string;
-        statusCode: number;
-        statusMessage: string;
-        headers: Record<string, string>;
-        content: string;
-        // ... more properties
-        toString(): string;
-    }
-    ```
+- `FileContentData`
+- `HttpResponseData`
+- `UIPageResultData`
+- `WorkflowDetailResultData`
 
-3.  **组合和封装结果类型**:
-    有时，它还会将上述数据接口封装在更高一级的 `Result` 接口中，例如将 `FileContentData` 封装在 `FileContentResult` 中，后者会明确包含 `success` 和 `data` 字段。
+### `...Result`
 
-## 开发者如何受益
+表示带 `success` / `error` 包装的结果对象，例如：
 
-作为脚本开发者，你不会直接导入或使用 `results.d.ts`。它的价值体现在与 `tool-types.d.ts` 的协同工作中，为你的开发过程带来类型安全和智能提示。
+- `SystemSettingResult`
+- `UIPageResult`
+- `ChatCreationResult`
+- `MemoryLinkResult`
 
-**工作流程:**
+### `toString()`
 
-1.  你在脚本中调用一个工具，例如 `await Tools.Files.read('/path/to/file')`。
-2.  TypeScript 查看 `Tools.Files.read` 的函数签名，发现它返回 `Promise<FileContentData>`。
-3.  因为 `FileContentData` 接口在 `results.d.ts` 中有明确的定义，所以当你接收返回值时，IDE 就能准确地知道这个对象有哪些属性。
+很多 `...Data` 类型都声明了 `toString()`，说明运行时支持把结果转换成可读文本。
 
-**实际效果:**
+## 主要结果分类
 
-```typescript
-/// <reference path="./types/index.d.ts" />
+### 1. 文件与搜索结果
 
-async function example() {
-    const fileResult = await Tools.Files.read('/path/to/file');
+常见类型：
 
-    // IDE 知道 fileResult 是 FileContentData 类型
-    // 因此，当你输入 "fileResult." 时，它会智能地提示 content, path, size 等属性。
-    console.log(fileResult.content);
+- `FileEntry`
+- `FileExistsData`
+- `FileInfoData`
+- `DirectoryListingData`
+- `FileContentData`
+- `BinaryFileContentData`
+- `FilePartContentData`
+- `FileOperationData`
+- `FileApplyResultData`
+- `FindFilesResultData`
+- `GrepLineMatch`
+- `GrepFileMatch`
+- `GrepResultData`
 
-    // 如果你尝试访问一个不存在的属性，TypeScript 会报错。
-    // Error: Property 'nonExistent' does not exist on type 'FileContentData'.
-    // console.log(fileResult.nonExistent);
-}
+其中：
+
+- `FileContentData` 包含 `env`、`path`、`content`、`size`
+- `BinaryFileContentData` 通过 `contentBase64` 表示二进制内容
+- `GrepResultData` 包含 `matches`、`totalMatches`、`filesSearched`
+
+### 2. 网络结果
+
+常见类型：
+
+- `HttpResponseData`
+- `Link`
+- `VisitWebResultData`
+
+其中：
+
+- `HttpResponseData` 包含 `statusCode`、`statusMessage`、`headers`、`contentType`、`content`
+- `VisitWebResultData` 除了页面正文外，还可能包含 `metadata`、`links`、`imageLinks`、`visitKey`
+
+### 3. 系统 / 设备 / 应用结果
+
+常见类型：
+
+- `SleepResultData`
+- `SystemSettingData`
+- `AppOperationData`
+- `AppListData`
+- `NotificationData`
+- `LocationData`
+- `DeviceInfoResultData`
+
+其中：
+
+- `SystemSettingData` 包含 `namespace`、`setting`、`value`
+- `AppOperationData` 包含 `operationType`、`packageName`、`success`、`details`
+- `NotificationData` 提供通知列表和抓取时间戳
+- `LocationData` 提供经纬度、精度、地址等信息
+
+### 4. UI 与自动化结果
+
+常见类型：
+
+- `SimplifiedUINode`
+- `UIPageResultData`
+- `UIActionResultData`
+- `CombinedOperationResultData`
+- `AutomationExecutionResultData`
+
+其中：
+
+- `UIPageResultData` 包含 `packageName`、`activityName`、`uiElements`
+- `UIActionResultData` 描述一次点击、输入、滑动等动作
+- `AutomationExecutionResultData` 额外包含 `agentId`、`displayId`、`executionSuccess`、`executionMessage`、`finalState`
+
+### 5. Shell / Intent / Terminal / FFmpeg 结果
+
+常见类型：
+
+- `ADBResultData`
+- `IntentResultData`
+- `TerminalCommandResultData`
+- `TerminalSessionCreationResultData`
+- `TerminalSessionCloseResultData`
+- `TerminalSessionScreenResultData`
+- `FFmpegResultData`
+- `StringResultData`
+
+`StringResultData` 很简单，只包含：
+
+- `value`
+- `toString()`
+
+很多“控制类 API”都会返回它。
+
+### 6. 工作流结果与工作流结构
+
+`results.d.ts` 不只是工作流返回值，还定义了工作流图本身的数据结构。
+
+常见类型：
+
+- `WorkflowResultData`
+- `WorkflowListResultData`
+- `NodePosition`
+- `StaticValue`
+- `NodeReference`
+- `ParameterValue`
+- `TriggerType`
+- `TriggerNode`
+- `ExecuteNode`
+- `ConditionOperator`
+- `ConditionNode`
+- `LogicOperator`
+- `LogicNode`
+- `ExtractMode`
+- `ExtractNode`
+- `WorkflowNode`
+- `WorkflowConnectionConditionKeyword`
+- `WorkflowConnectionCondition`
+- `WorkflowNodeConnection`
+- `WorkflowDetailResultData`
+
+其中：
+
+- `WorkflowResultData` / `WorkflowListResultData` 更偏列表视图
+- `WorkflowDetailResultData` 包含 `nodes`、`connections`、`enabled`、统计信息与最近执行状态
+- `WorkflowNode` 是五类节点的联合类型
+
+### 7. 软件设置与模型配置结果
+
+常见类型：
+
+- `SpeechTtsHttpConfigResultItem`
+- `SpeechSttHttpConfigResultItem`
+- `SpeechServicesConfigResultData`
+- `SpeechServicesUpdateResultData`
+- `ModelConfigResultItem`
+- `FunctionModelMappingResultItem`
+- `ModelConfigsResultData`
+- `ModelConfigCreateResultData`
+- `ModelConfigUpdateResultData`
+- `ModelConfigDeleteResultData`
+- `FunctionModelConfigsResultData`
+- `FunctionModelConfigResultData`
+- `FunctionModelBindingResultData`
+- `ModelConfigConnectionTestItemResultData`
+- `ModelConfigConnectionTestResultData`
+
+这一部分主要给 `Tools.SoftwareSettings` 使用。
+
+### 8. Chat 结果
+
+常见类型：
+
+- `ChatServiceStartResultData`
+- `ChatCreationResultData`
+- `ChatInfo`
+- `ChatListResultData`
+- `ChatSwitchResultData`
+- `ChatTitleUpdateResultData`
+- `ChatDeleteResultData`
+- `MessageSendResultData`
+- `ChatMessageInfo`
+- `ChatMessagesResultData`
+- `CharacterCardListResultData`
+- `CharacterCardInfo`
+- `ChatFindResultData`
+- `AgentStatusResultData`
+
+同时也定义了对应的包装结果：
+
+- `ChatServiceStartResult`
+- `ChatCreationResult`
+- `ChatListResult`
+- `ChatFindResult`
+- `AgentStatusResult`
+- `ChatSwitchResult`
+- `ChatTitleUpdateResult`
+- `ChatDeleteResult`
+- `MessageSendResult`
+- `ChatMessagesResult`
+
+### 9. 记忆链接结果
+
+常见类型：
+
+- `MemoryLinkResultData`
+- `MemoryLinkQueryResultData`
+- `MemoryLinkResult`
+- `MemoryLinkQueryResult`
+
+`MemoryLinkQueryResultData` 内部包含 `links[]`，每一项都有：
+
+- `linkId`
+- `sourceTitle`
+- `targetTitle`
+- `linkType`
+- `weight`
+- `description`
+
+## 示例
+
+### 使用 `FileContentData`
+
+```ts
+const file = await Tools.Files.read('/sdcard/a.txt');
+console.log(file.content);
+console.log(file.size);
 ```
 
-简而言之，`results.d.ts` 是所有工具返回值的“**数据蓝图**”。它通过为输出数据提供清晰的结构定义，确保了整个脚本开发环境的类型安全和可靠性，并极大地改善了代码自动补全的体验。 
+### 使用 `VisitWebResultData`
+
+```ts
+const page = await Tools.Net.visit('https://example.com');
+console.log(page.title);
+console.log(page.links?.length ?? 0);
+```
+
+### 使用 `WorkflowDetailResultData`
+
+```ts
+const detail = await Tools.Workflow.get('workflow_123');
+console.log(detail.nodes.length);
+console.log(detail.connections.length);
+```
+
+## 如何阅读这份文件
+
+推荐按“谁返回它”来反查：
+
+- 文件相关 → `files.d.ts`
+- 网络相关 → `network.d.ts` / `okhttp.d.ts`
+- 系统相关 → `system.d.ts`
+- UI 相关 → `ui.d.ts`
+- 工作流相关 → `workflow.d.ts`
+- 软件设置相关 → `software_settings.d.ts`
+- Chat 相关 → `chat.d.ts`
+- 记忆相关 → `memory.d.ts`
+
+## 相关文件
+
+- `examples/types/results.d.ts`
+- `docs/package_dev/files.md`
+- `docs/package_dev/network.md`
+- `docs/package_dev/system.md`
+- `docs/package_dev/ui.md`
+- `docs/package_dev/workflow.md`
+- `docs/package_dev/software_settings.md`
+- `docs/package_dev/chat.md`
+- `docs/package_dev/memory.md`

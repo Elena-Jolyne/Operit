@@ -1,131 +1,202 @@
-# API 文档: `ui.d.ts`
+# API 文档：`ui.d.ts`
 
-本文档详细介绍了 `ui.d.ts` 文件中定义的 API，这是进行 UI 自动化脚本编写的核心。它提供了检查屏幕内容和模拟用户交互的强大功能。
+`ui.d.ts` 描述了两层 UI 能力：
 
-## 概述
+- `Tools.UI`：直接执行点击、输入、滑动等动作。
+- `UINode`：把页面结构包装成可搜索、可遍历、可交互的对象模型。
 
-UI 自动化 API 主要由两部分组成：
+## 运行时入口
 
-1.  **`Tools.UI` 命名空间**: 提供了一系列用于执行基本 UI 操作（如点击、滑动、输入文本）的全局函数。
-2.  **`UINode` 类**: 一个功能极其强大的类，它将屏幕上的 UI 元素封装成一个类似 Web DOM 节点的对​​象，允许你查询元素属性、遍历 UI 树以及对特定元素执行操作。
-
----
-
-## `Tools.UI` 命名空间详解
-
-这些函数提供了直接与屏幕交互的基础能力。
-
--   `getPageInfo(): Promise<UIPageResultData>`:
-    获取当前屏幕的完整 UI 结构快照。这是绝大多数 UI 自动化任务的起点。返回的数据可以被 `UINode.fromPageInfo()` 用来构造一个 `UINode` 树。
-
--   `tap(x: number, y: number): Promise<UIActionResultData>`:
-    在屏幕的指定 `(x, y)` 坐标处模拟一次点击。
-
--   `swipe(startX: number, startY: number, endX: number, endY: number): Promise<UIActionResultData>`:
-    模拟一次从 `(startX, startY)` 到 `(endX, endY)` 的滑动操作。
-
--   `clickElement(...)`:
-    一个重载的、非常灵活的函数，用于查找并点击一个元素。你可以通过多种方式指定目标元素：
-    -   `clickElement({ resourceId?: '...', text?: '...', ... })`: 通过包含多个属性的对象来精确查找。
-    -   `clickElement('com.app:id/button')`: 通过 `resourceId` 点击。
-    -   `clickElement('com.app:id/button', 2)`: 点击 `resourceId` 匹配的第3个元素 (索引从0开始)。
-
--   `setText(text: string): Promise<UIActionResultData>`:
-    在当前聚焦的输入框中输入指定的文本。
-
--   `pressKey(keyCode: string): Promise<UIActionResultData>`:
-    模拟按下物理或虚拟按键，例如 `'BACK'`, `'HOME'`, `'ENTER'`。
-
----
-
-## `UINode` 类详解
-
-`UINode` 是 UI 自动化中最核心、最强大的工具。它将从 `getPageInfo()` 获取的原始 UI 数据转换成一个易于操作的树状对象模型。
-
-**获取 `UINode` 实例的主要方式:**
-
-```typescript
-// 获取代表当前整个页面的根 UINode 节点
-const page = await UINode.getCurrentPage();
+```ts
+Tools.UI
+UINode
 ```
 
-### 核心属性 (只读)
+`UINode` 也是全局类，可以直接使用。
 
--   `className: string`: 元素的类名 (e.g., `'android.widget.TextView'`)。
--   `text: string`: 元素的文本内容。
--   `contentDesc: string`: 元素的“内容描述”，常用于无文本的按钮。
--   `resourceId: string`: 元素的唯一资源 ID。
--   `bounds: string`: 元素在屏幕上的矩形坐标 (e.g., `'[0,100][200,300]'`)。
--   `isClickable: boolean`: 元素是否可点击。
--   `children: UINode[]`: 包含所有子节点的 `UINode` 数组。
--   `parent: UINode`: 父 `UINode` 节点。
--   `centerPoint: { x: number, y: number }`: 根据 `bounds` 计算出的中心点坐标。
+## `Tools.UI` 命名空间
 
-### 核心方法
+### 页面读取
 
-#### 查找和遍历
+#### `getPageInfo()`
 
--   `find(criteria: object | function): UINode | undefined`:
-    查找**第一个**满足条件的后代节点。
--   `findAll(criteria: object | function): UINode[]`:
-    查找**所有**满足条件的后代节点。
+获取当前页面信息，返回 `UIPageResultData`。
 
--   **便捷查找方法 (常用):**
-    -   `findByText(text: string, options?: ...)`: 通过文本内容查找。
-    -   `findById(id: string, options?: ...)`: 通过 `resourceId` 查找 (最推荐，最稳定)。
-    -   `findByClass(className: string, options?: ...)`: 通过类名查找。
-    -   `findByContentDesc(description: string, options?: ...)`: 通过内容描述查找。
-    -   `findAllBy...`: 与上述方法对应，但返回所有匹配项的数组。
+### 直接动作
 
-#### 交互操作
+#### `tap(x, y)`
 
--   `click(): Promise<UIActionResultData>`:
-    点击该节点。它会自动计算元素的中心点并执行 `tap` 操作。
+按坐标点击。
 
--   `setText(text: string): Promise<UIActionResultData>`:
-    在此节点上输入文本（仅当该节点是输入框时有效）。
+#### `longPress(x, y)`
 
--   `wait(ms?: number): Promise<UINode>`:
-    等待指定毫秒数，然后**重新获取**整个页面的 UI 结构并返回一个新的根 `UINode`。这对于等待动画或网络加载完成非常有用。
+按坐标长按。
 
--   `clickAndWait(ms?: number): Promise<UINode>`:
-    一个组合操作：先 `click()` 当前节点，然后执行 `wait()`。这是处理点击后页面跳转或内容更新的**黄金标准**。
+#### `setText(text, resourceId?)`
 
-#### 静态方法
+向输入框设置文本；若给出 `resourceId`，会尝试定位对应输入框。
 
--   `UINode.getCurrentPage(): Promise<UINode>`:
-    静态方法，直接获取当前页面的根 `UINode`。相当于 `Tools.UI.getPageInfo()` 和 `UINode.fromPageInfo()` 的结合。
+#### `pressKey(keyCode)`
 
--   `UINode.fromPageInfo(pageInfo: UIPageResultData): UINode`:
-    将 `getPageInfo` 返回的原始数据转换为 `UINode` 对象。
+按键事件。
 
-**示例: 查找并点击一个按钮**
-```typescript
-async function findAndClick() {
-    try {
-        const page = await UINode.getCurrentPage();
-        
-        // 优先使用 ID 查找
-        let loginButton = page.findById("com.example.app:id/login_button");
+#### `swipe(startX, startY, endX, endY, duration?)`
 
-        // 如果 ID 找不到，尝试通过文本查找
-        if (!loginButton) {
-            loginButton = page.findByText("登录");
-        }
+执行滑动。
 
-        if (loginButton) {
-            // 点击按钮，并等待 2 秒让新页面加载
-            const newPage = await loginButton.clickAndWait(2000);
-            
-            // 现在 newPage 是点击操作之后的新页面 UINode
-            console.log("成功点击并跳转到新页面。");
-            complete({ success: true, message: "操作成功" });
-        } else {
-            complete({ success: false, message: "未找到登录按钮。" });
-        }
+### 元素点击：`clickElement(...)`
 
-    } catch (error) {
-        complete({ success: false, message: `UI 操作失败: ${error.message}` });
-    }
+该方法有多种重载形式，是 `ui.d.ts` 中最复杂的一组定义。
+
+支持的调用方式包括：
+
+```ts
+clickElement(resourceId)
+clickElement(bounds)
+clickElement(resourceId, index)
+clickElement(type, value)
+clickElement(type, value, index)
+clickElement({ resourceId?, className?, text?, contentDesc?, bounds?, index?, partialMatch?, isClickable? })
+```
+
+其中：
+
+- `bounds` 格式为 `"[x1,y1][x2,y2]"`
+- `type` 可为 `resourceId | className | bounds`
+- 对象参数支持按多种属性组合查找
+
+### 子代理
+
+#### `runSubAgent(intent, maxSteps?, agentId?, targetApp?)`
+
+```ts
+runSubAgent(intent: string, maxSteps?: number, agentId?: string, targetApp?: string): Promise<AutomationExecutionResultData>
+```
+
+适合用高层目标描述驱动 UI 自动化。
+
+## `UINode` 类
+
+### 创建方式
+
+通常有两种：
+
+```ts
+const root = await UINode.getCurrentPage();
+```
+
+或者：
+
+```ts
+const page = await Tools.UI.getPageInfo();
+const root = UINode.fromPageInfo(page);
+```
+
+### 常用只读属性
+
+- `className`
+- `text`
+- `contentDesc`
+- `resourceId`
+- `bounds`
+- `isClickable`
+- `rawNode`
+- `parent`
+- `path`
+- `centerPoint`
+- `children`
+- `childCount`
+
+### 文本提取
+
+- `allTexts(trim?, skipEmpty?)`
+- `textContent(separator?)`
+- `hasText(text, caseSensitive?)`
+
+### 搜索方法
+
+- `find(criteria, deep?)`
+- `findAll(criteria, deep?)`
+- `findByText(text, options?)`
+- `findAllByText(text, options?)`
+- `findById(id, options?)`
+- `findAllById(id, options?)`
+- `findByClass(className, options?)`
+- `findAllByClass(className, options?)`
+- `findByContentDesc(description, options?)`
+- `findAllByContentDesc(description, options?)`
+- `findClickable()`
+- `closest(criteria)`
+
+### 动作方法
+
+- `click()`
+- `longPress()`
+- `setText(text)`
+- `wait(ms?)`
+- `clickAndWait(ms?)`
+- `longPressAndWait(ms?)`
+
+其中 `wait()` / `clickAndWait()` / `longPressAndWait()` 返回的是更新后的 `UINode` 页面状态。
+
+### 工具方法
+
+- `toString()`
+- `toTree(indent?)`
+- `toTreeString(indent?)`
+- `toFormattedString?()`
+- `equals(other)`
+
+### 静态方法
+
+- `fromPageInfo(pageInfo)`
+- `getCurrentPage()`
+- `findAndWait(query, delayMs?)`
+- `clickAndWait(query, delayMs?)`
+- `longPressAndWait(query, delayMs?)`
+
+## 示例
+
+### 读取当前页面并查找文本
+
+```ts
+const root = await UINode.getCurrentPage();
+const button = root.findByText('确定');
+if (button) {
+  await button.click();
 }
 ```
+
+### 使用 `clickElement` 的对象模式
+
+```ts
+await Tools.UI.clickElement({
+  text: '登录',
+  partialMatch: false,
+  isClickable: true
+});
+```
+
+### 设置输入框文本
+
+```ts
+await Tools.UI.setText('hello world', 'com.example:id/input');
+```
+
+### 调用 UI 子代理
+
+```ts
+const result = await Tools.UI.runSubAgent(
+  '打开系统设置并进入 WLAN 页面',
+  20,
+  undefined,
+  'com.android.settings'
+);
+complete(result);
+```
+
+## 相关文件
+
+- `examples/types/ui.d.ts`
+- `examples/types/results.d.ts`
+- `docs/package_dev/results.md`

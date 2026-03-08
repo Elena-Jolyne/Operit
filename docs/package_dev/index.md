@@ -1,77 +1,228 @@
-# API 文档: `index.d.ts`
+# API 文档：`index.d.ts`
 
-本文档旨在解释 `index.d.ts` 文件在脚本开发环境中的核心作用。这个文件是整个类型系统的入口点，它本身不定义新的功能，而是负责**组织、聚合和暴露**所有其他 `.d.ts` 文件中定义的类型和接口。
+`index.d.ts` 是整个包开发类型系统的总入口。它做三件事：
 
-## 核心职责
+- 重导出各个 `.d.ts` 文件中的类型。
+- 把常用对象和函数注入全局作用域。
+- 组装运行时常用的 `Tools` 命名空间。
 
-`index.d.ts` 的主要职责有三个：
+如果你只在脚本顶部引用一个类型入口，通常就是它。
 
-1.  **导入与重导出 (Import & Re-export)**:
-    它导入了来自 `core.d.ts`, `ui.d.ts`, `android.d.ts` 等所有模块的类型定义，然后再将它们统一导出。这使得开发者在理论上只需要引用这一个文件就能访问到所有 API 的类型信息（尽管 `/// <reference />` 指令通常会自动处理）。
+## 推荐引用方式
 
-2.  **构建全局 `Tools` 对象**:
-    脚本环境中最常用的全局对象 `Tools` 是在这里组装的。`index.d.ts` 将来自不同文件的命名空间（如 `Files`, `Net`, `System`, `UI`, `FFmpeg`）组合成一个统一的 `Tools` 对象，方便开发者通过 `Tools.Files.read()` 这样的形式调用。
+```ts
+/// <reference path="./types/index.d.ts" />
+```
 
-    ```typescript
-    // index.d.ts (Conceptual)
-    import { Files as FilesType } from './files';
-    import { Net as NetType } from './network';
-    // ... other imports
+这样 IDE 可以直接识别全局 API 和结果类型。
 
-    declare global {
-        const Tools: {
-            Files: typeof FilesType;
-            Net: typeof NetType;
-            // ... other namespaces
-        };
-    }
-    ```
+## `index.d.ts` 做了什么
 
-3.  **定义全局作用域 (Global Scope)**:
-    这是 `index.d.ts` 最重要的功能之一。它使用 TypeScript 的 `declare global` 块来将最常用、最重要的类、函数和类型注入到全局作用域中。这意味着你在 `.ts` 脚本中可以直接使用它们，而**无需任何 `import` 语句**。
+### 1. 重导出核心类型
 
-## 全局可用的核心 API
+它会重导出：
 
-通过 `index.d.ts` 的 `declare global` 设置，以下 API 成为全局可用：
+- `core.d.ts`
+- `results.d.ts`
+- `tool-types.d.ts`
+- `java-bridge.d.ts`
+- `toolpkg.d.ts`
+- `compose-dsl.d.ts`
+- `compose-dsl.material3.generated.d.ts`
 
-### 核心函数
+### 2. 导出主要命名空间
 
--   `complete(result: any): void`: 结束脚本执行并返回结果。
--   `toolCall(name: string, params?: object): Promise<any>`: 在脚本内部调用其他工具。
--   `getEnv(key: string): string | undefined`: 读取环境变量值。优先返回应用内“环境配置”界面中设置的值，其次尝试从系统环境变量中读取。常用于访问 API Key 等敏感配置，通常配合脚本 `METADATA` 中的 `env` 字段一起使用。
--   `getState(): string | undefined`: 获取当前激活的包状态 ID（当包的 `METADATA` 定义了 `states` 时）。如果当前包未使用 states 或未命中任何 state，则返回 `undefined`。
+它还显式导出以下模块：
 
-### 核心类
+- `Net`
+- `System`
+- `SoftwareSettings`
+- `UI`
+- `UINode`
+- `FFmpegVideoCodec` / `FFmpegAudioCodec` / `FFmpegResolution` / `FFmpegBitrate`
+- `Tasker`
+- `Workflow`
+- `ToolPkg`
+- `Chat`
+- `Memory`
+- Android 相关类与枚举
 
--   `UINode`: UI 元素操作的核心类 (来自 `ui.d.ts`)。
--   `Intent`: 用于应用间通信的 Intent 类 (来自 `android.d.ts`)。
--   `Android`: Android 底层功能的总入口 (来自 `android.d.ts`)。
--   `OkHttp`: 强大的 HTTP 客户端 (来自 `okhttp.d.ts`)。
+### 3. 注入全局对象与函数
 
-### 核心对象
+这也是 `index.d.ts` 最重要的职责：你在脚本里通常不需要 `import`，就能直接使用这些对象。
 
--   `Tools`: 包含所有主要工具集的命名空间对象 (如 `Tools.Files`, `Tools.UI` 等)。
--   `_`: Lodash-like 实用工具库 (来自 `core.d.ts`)。
--   `dataUtils`: 数据处理工具库 (来自 `core.d.ts`)。
--   `CryptoJS`: 加密工具库 (来自 `cryptojs.d.ts`)。
--   `Jimp`: 图像处理库 (来自 `jimp.d.ts`)。
--   `exports`: CommonJS 风格的模块导出对象。
+## 全局可用的函数
 
-### 核心类型
+### 工具调用与结果返回
 
--   所有在 `results.d.ts` 中定义的返回结果类型，例如 `UIPageResultData`, `FileContentData`, `HttpResponseData`, `GrepResultData` 等，都在全局可用。
+- `toolCall(...)`
+- `complete(result)`
+- `sendIntermediateResult(result)`
 
-## 开发者如何使用
+### 上下文读取
 
-作为脚本开发者，你不需要直接与 `index.d.ts` 交互。你只需要知道，由于这个文件的存在，你可以直接在你的 `.ts` 脚本中使用上述所有全局 API。
+- `getEnv(key)`
+- `getState()`
+- `getLang()`
+- `getCallerName()`
+- `getChatId()`
+- `getCallerCardId()`
 
-为了确保你的 IDE（如 VS Code）能够正确识别这些全局类型并提供智能提示，请务必在你的脚本文件顶部包含三斜杠指令：
+## 全局可用的对象与类
 
-```typescript
+### Android / UI 相关
+
+- `Intent`
+- `IntentFlag`
+- `IntentAction`
+- `IntentCategory`
+- `UINode`
+- `Android`
+
+### 运行时工具对象
+
+- `Tools`
+- `_`
+- `dataUtils`
+- `exports`
+- `NativeInterface`
+- `Java`
+- `Kotlin`
+
+### 常量
+
+- `OPERIT_DOWNLOAD_DIR`
+- `OPERIT_CLEAN_ON_EXIT_DIR`
+
+## `Tools` 命名空间
+
+`Tools` 会把各模块运行时入口组装到一个对象下：
+
+```ts
+const Tools: {
+  Files
+  Net
+  System
+  SoftwareSettings
+  UI
+  FFmpeg
+  Tasker
+  Workflow
+  Chat
+  Memory
+  calc
+}
+```
+
+其中：
+
+- `Tools.Tasker` 对应 `Tasker.Runtime`
+- `Tools.Workflow` 对应 `Workflow.Runtime`
+- `Tools.calc(expression)` 返回 `Promise<CalculationResultData>`
+
+## 全局类型
+
+`index.d.ts` 还把大量结果类型提升到了全局作用域里，例如：
+
+- `CalculationResultData`
+- `SleepResultData`
+- `SystemSettingData`
+- `AppOperationData`
+- `AppListData`
+- `DeviceInfoResultData`
+- `UIPageResultData`
+- `UIActionResultData`
+- `FileContentData`
+- `HttpResponseData`
+- `VisitWebResultData`
+- `WorkflowDetailResultData`
+- `ModelConfigResultItem`
+- `MemoryLinkResultData`
+
+此外，它还把以下桥接类型作为全局类型暴露：
+
+- `ComposeDslContext`
+- `ComposeDslScreen`
+- `ComposeNode`
+- `ComposeCanvasCommand`
+- `JavaBridgeApi`
+- `JavaBridgeClass`
+- `JavaBridgeInstance`
+- `JavaBridgeHandle`
+- `JavaBridgePackage`
+- `JavaBridgeJsInterfaceMarker`
+- `JavaBridgeJsInterfaceImpl`
+- `JavaBridgeJsMethod`
+- `JavaBridgeInterfaceRef`
+- `JavaBridgeCallbackResult`
+
+## 示例
+
+### 典型脚本写法
+
+```ts
 /// <reference path="./types/index.d.ts" />
 
-// 现在你可以直接使用全局 API，并获得代码补全
 const page = await UINode.getCurrentPage();
-await Tools.System.sleep(1000);
-complete({ success: true });
-``` 
+const title = page.findByText('设置');
+
+if (title) {
+  await title.click();
+}
+
+const response = await Tools.Net.httpGet('https://example.com');
+complete({
+  ok: true,
+  status: response.statusCode
+});
+```
+
+### 使用上下文函数
+
+```ts
+const apiKey = getEnv('OPENAI_API_KEY');
+const state = getState();
+const chatId = getChatId();
+
+sendIntermediateResult({ state, chatId });
+```
+
+## 本目录文档索引
+
+当前 `docs/package_dev` 已同步以下文件：
+
+- `android.md`
+- `chat.md`
+- `core.md`
+- `cryptojs.md`
+- `ffmpeg.md`
+- `files.md`
+- `jimp.md`
+- `memory.md`
+- `network.md`
+- `okhttp.md`
+- `results.md`
+- `software_settings.md`
+- `system.md`
+- `tasker.md`
+- `tool-types.md`
+- `ui.md`
+- `workflow.md`
+
+## 尚未单独展开的类型文件
+
+`examples/types` 中还有一些高级或扩展定义目前未在本目录单独成文，例如：
+
+- `compose-dsl.d.ts`
+- `compose-dsl.material3.generated.d.ts`
+- `java-bridge.d.ts`
+- `toolpkg.d.ts`
+- `pako.d.ts`
+
+这些类型已经由 `index.d.ts` 重导出，使用时仍然以对应 `.d.ts` 为准。
+
+## 相关文件
+
+- `examples/types/index.d.ts`
+- `docs/package_dev/core.md`
+- `docs/package_dev/results.md`

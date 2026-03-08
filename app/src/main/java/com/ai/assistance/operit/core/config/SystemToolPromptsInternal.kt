@@ -219,7 +219,7 @@ object SystemToolPromptsInternal {
                         ),
                         ToolPrompt(
                             name = "web_click",
-                            description = "Click an element by snapshot ref.",
+                            description = "Click an element by snapshot ref. If the click triggers a file download, the result will include download details.",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(
@@ -2747,7 +2747,7 @@ object SystemToolPromptsInternal {
                         ),
                         ToolPrompt(
                             name = "web_click",
-                            description = "按快照 ref 或 CSS 选择器点击元素。",
+                            description = "按快照 ref 或 CSS 选择器点击元素；如果点击触发文件下载，返回结果会包含下载信息。",
                             parametersStructured =
                                 listOf(
                                     ToolParameterSchema(

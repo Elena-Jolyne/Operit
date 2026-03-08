@@ -1,71 +1,99 @@
-# API 文档: `cryptojs.d.ts`
+# API 文档：`cryptojs.d.ts`
 
-本文档详细介绍了 `cryptojs.d.ts` 文件中定义的 API。它提供了 [CryptoJS](https://cryptojs.gitbook.io/docs/) 库的一个子集，通过原生桥接实现，用于在脚本中执行常见的加密操作。
+`cryptojs.d.ts` 描述的是全局 `CryptoJS` 对象的可用子集。它不是完整的上游 CryptoJS，而是应用内通过原生桥接暴露出来的一部分能力。
 
-## 概述
+## 作用
 
-所有加密功能都通过一个全局的 `CryptoJS` 对象提供。这个实现是针对特定需求定制的，可能与标准的 CryptoJS 库在行为上略有不同。
+当前类型定义主要覆盖两类用途：
 
--   **`CryptoJS.MD5`**: 计算 MD5 哈希值。
--   **`CryptoJS.AES.decrypt`**: 使用 AES 算法解密数据。
--   **`CryptoJS.enc`**: 处理编码格式转换。
+- 计算 `MD5`。
+- 使用 `AES.decrypt()` 做解密。
 
----
+## 全局对象
 
-## `CryptoJS` 对象详解
-
-### `CryptoJS.MD5(message: string): WordArray`
-
-计算输入字符串的 MD5 哈希值。
-
--   **`message`**: 需要计算哈希的字符串。
--   **返回值**: 返回一个 `WordArray` 对象，你可以调用其 `.toString()` 方法来获取十六进制格式的哈希字符串。
-
-**示例:**
-
-```typescript
-const message = "Hello, World!";
-const hash = CryptoJS.MD5(message);
-const hashString = hash.toString(); // e.g., "65a8e27d8879283831b664bd8b7f0ad4"
-console.log(`MD5 Hash: ${hashString}`);
+```ts
+CryptoJS
 ```
 
-### `CryptoJS.AES.decrypt(ciphertext: string, key: any, cfg?: any): WordArray`
+可以直接使用，无需 `import`。
 
-使用 AES 算法进行解密。此函数的具体行为（尤其是 `key` 和 `cfg` 参数的用法）与原生实现紧密相关。
+## 可用类型与成员
 
--   **`ciphertext`**: 需要解密的密文字符串。
--   **`key`**: 解密密钥。
--   **`cfg`**: 配置对象，可能包含模式（mode）、填充（padding）等信息。
--   **返回值**: 返回一个 `WordArray` 对象，代表解密后的明文。你需要调用 `.toString(CryptoJS.enc.Utf8)` 来获取可读的 UTF-8 字符串。
+### `CryptoJS.WordArray`
 
-**示例 (特定于项目中的用法):**
+桥接后的结果对象，核心能力是：
 
-```typescript
-// 假设这是从某个 API 获取的加密数据
-const encryptedData = "U2FsdGVkX1...encrypted..."; 
-const timestamp = "1678886400"; // 密钥
-const secret = "my-secret-phrase"; // 另一个配置参数
-
-// 解密
-const decrypted = CryptoJS.AES.decrypt(encryptedData, timestamp, { iv: secret });
-
-// 将解密后的 WordArray 转换为 Utf8 字符串
-const plaintext = decrypted.toString(CryptoJS.enc.Utf8);
-console.log(`Decrypted Text: ${plaintext}`);
+```ts
+toString(encoding?: any): string
 ```
 
-### `CryptoJS.enc`
+常见写法：
 
-用于处理不同编码格式的对象。
+```ts
+const hex = CryptoJS.MD5("hello").toString();
+```
 
--   **`CryptoJS.enc.Hex.parse(hexStr: string): WordArray`**: 将一个十六进制字符串解析成 `WordArray` 对象。
--   **`CryptoJS.enc.Utf8`**: 一个标记，用于在 `.toString()` 方法中指定输出编码为 UTF-8。
+### `CryptoJS.MD5(message)`
 
-### `WordArray` 接口
+```ts
+MD5(message: string): WordArray
+```
 
-这是加密操作（如 `MD5` 和 `AES.decrypt`）返回的结果对象的类型。
+对字符串做 MD5 计算，返回 `WordArray`。
 
--   **`toString(encoding?: any): string`**: 是其最重要的方法，用于将内部的字节数组转换为字符串。
-    -   如果不提供 `encoding`，通常默认输出为十六进制字符串。
-    -   如果提供 `CryptoJS.enc.Utf8`，则输出为 UTF-8 编码的字符串。 
+### `CryptoJS.AES.decrypt(ciphertext, key, cfg?)`
+
+```ts
+CryptoJS.AES.decrypt(ciphertext: string, key: any, cfg?: any): WordArray
+```
+
+说明：
+
+- 这里的 `key` 与 `cfg` 由桥接实现解释。
+- 类型定义里没有提供 `AES.encrypt()`，因此文档也不应假设它可用。
+
+### 编码与模式相关对象
+
+可用成员如下：
+
+- `CryptoJS.enc.Hex.parse(hexStr)`
+- `CryptoJS.enc.Utf8`
+- `CryptoJS.pad.Pkcs7`
+- `CryptoJS.mode.ECB`
+
+## 示例
+
+### 计算 MD5
+
+```ts
+const digest = CryptoJS.MD5("assistance").toString();
+complete({ digest });
+```
+
+### 将十六进制字符串转为 `WordArray`
+
+```ts
+const wordArray = CryptoJS.enc.Hex.parse("48656c6c6f");
+const text = wordArray.toString(CryptoJS.enc.Utf8);
+```
+
+### AES 解密
+
+```ts
+const result = CryptoJS.AES.decrypt(ciphertext, key, {
+  mode: CryptoJS.mode.ECB,
+  padding: CryptoJS.pad.Pkcs7
+});
+const plaintext = result.toString(CryptoJS.enc.Utf8);
+```
+
+## 注意事项
+
+- 该定义文件描述的是“当前桥接层实际暴露的 API”，不是完整版 CryptoJS。
+- 如果某个上游 CryptoJS 方法没有出现在 `examples/types/cryptojs.d.ts`，就不要在脚本里假设它存在。
+- `toString()` 的编码参数在桥接层里更像提示值，真正处理逻辑由原生侧决定。
+
+## 相关文件
+
+- `examples/types/cryptojs.d.ts`
+- `examples/types/index.d.ts`

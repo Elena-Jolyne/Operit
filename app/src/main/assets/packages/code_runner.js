@@ -123,6 +123,12 @@
           description: { zh: "Python 解释器选项，默认为空。可自定义如 -O（优化）、-u（无缓冲）等", en: "Python interpreter flags (default: empty). Examples: -O (optimize), -u (unbuffered)." }
           type: string
           required: false
+        },
+        {
+          name: script_args
+          description: { zh: "传递给 Python 脚本的参数，使用 | 分隔，例如 arg1|arg with space|--name=alice", en: "Arguments passed to the Python script, separated by | (e.g. arg1|arg with space|--name=alice)." }
+          type: string
+          required: false
         }
       ]
     },
@@ -139,6 +145,12 @@
         {
           name: python_flags
           description: { zh: "Python 解释器选项，默认为空。可自定义如 -O（优化）、-u（无缓冲）等", en: "Python interpreter flags (default: empty). Examples: -O (optimize), -u (unbuffered)." }
+          type: string
+          required: false
+        },
+        {
+          name: script_args
+          description: { zh: "传递给 Python 文件的参数，使用 | 分隔，例如 arg1|arg with space|--name=alice", en: "Arguments passed to the Python file, separated by | (e.g. arg1|arg with space|--name=alice)." }
           type: string
           required: false
         }
@@ -414,6 +426,17 @@ EOF`);
     // Helper function to safely escape strings for shell commands
     function escapeForShell(str) {
         return str.replace(/'/g, "'\\''");
+    }
+    function buildPipeSeparatedShellArgs(raw) {
+        if (!raw || raw.trim() === "") {
+            return "";
+        }
+        return raw
+            .split("|")
+            .map(part => part.trim())
+            .filter(part => part.length > 0)
+            .map(part => `'${escapeForShell(part)}'`)
+            .join(" ");
     }
     // Helper function to execute JavaScript code and capture logs/return value
     async function executeJavaScript(script) {
@@ -853,10 +876,12 @@ int main() {
         // Use persistent venv interpreter
         const { pythonBin } = await ensurePersistentVenv();
         const pythonFlags = params.python_flags || "";
+        const scriptArgs = buildPipeSeparatedShellArgs(params.script_args);
         const tempFilePath = "/tmp/temp_script.py";
+        const escapedTempFilePath = escapeForShell(tempFilePath);
         try {
             await executeTerminalCommand(`cat <<'EOF' > ${tempFilePath}\n${script}\nEOF`);
-            const result = await executeTerminalCommand(`${pythonBin} ${pythonFlags} ${tempFilePath}`);
+            const result = await executeTerminalCommand(`${pythonBin} ${pythonFlags} '${escapedTempFilePath}' ${scriptArgs}`.trim());
             if (result.exitCode === 0 && !hasError(result.output)) {
                 return result.output.trim();
             }
@@ -873,14 +898,16 @@ int main() {
         if (!filePath || filePath.trim() === "") {
             throw new Error("请提供要执行的 Python 文件路径");
         }
-        const fileExistsResult = await executeTerminalCommand(`test -f ${filePath}`);
+        const escapedPath = escapeForShell(filePath);
+        const fileExistsResult = await executeTerminalCommand(`test -f '${escapedPath}'`);
         if (fileExistsResult.exitCode !== 0 || hasError(fileExistsResult.output)) {
             throw new Error(`Python 文件不存在或路径错误: ${filePath}`);
         }
         // Use persistent venv interpreter
         const { pythonBin } = await ensurePersistentVenv();
         const pythonFlags = params.python_flags || "";
-        const result = await executeTerminalCommand(`${pythonBin} ${pythonFlags} ${filePath}`);
+        const scriptArgs = buildPipeSeparatedShellArgs(params.script_args);
+        const result = await executeTerminalCommand(`${pythonBin} ${pythonFlags} '${escapedPath}' ${scriptArgs}`.trim());
         if (result.exitCode === 0 && !hasError(result.output)) {
             return result.output.trim();
         }

@@ -1,73 +1,189 @@
-# API 文档: `tool-types.d.ts`
+# API 文档：`tool-types.d.ts`
 
-本文档旨在解释 `tool-types.d.ts` 文件在脚本类型系统中的作用。这个文件本身不直接提供可执行的 API，而是为 TypeScript 编译器和开发工具提供**元数据（Metadata）**，核心是定义了**工具名称**与**其返回结果类型**之间的映射关系。
+`tool-types.d.ts` 定义了一个核心接口：`ToolResultMap`。它的作用不是提供运行时能力，而是给 `toolCall()` 提供**工具名 → 返回类型**的静态映射。
 
-## 核心职责
+## 作用
 
-`tool-types.d.ts` 的主要职责有两个：
+当你这样写：
 
-1.  **定义工具名称类型 (Tool Name Types)**:
-    它将所有可用的原生工具按照类别（File, Net, System, UI 等）进行分组，并为每个类别定义一个字符串字面量联合类型（Union Type）。例如 `FileToolName` 可能包含 `'list_files' | 'read_file' | ...`。最后，将所有这些类型合并成一个总的 `ToolName` 类型。
-
-2.  **建立工具与返回值的映射 (`ToolResultMap`)**:
-    这是该文件最关键的部分。它定义了一个名为 `ToolResultMap` 的接口，这个接口就像一张**“查询表”**，将每个具体的工具名称（字符串）映射到该工具成功执行后 `Promise` 将解析出的具体数据结构类型。
-
-    **示例 (`ToolResultMap` 接口的一部分):**
-    ```typescript
-    import { DirectoryListingData, FileContentData, ... } from './results';
-
-    export interface ToolResultMap {
-        // 文件操作
-        'list_files': DirectoryListingData;
-        'read_file': FileContentData;
-
-        // 网络操作
-        'http_request': HttpResponseData;
-
-        // UI 操作
-        'get_page_info': UIPageResultData;
-
-        // ... 更多映射
-    }
-    ```
-
-## 开发者如何受益
-
-虽然你作为脚本开发者不需要直接导入或使用此文件，但它的存在极大地提升了开发体验，主要体现在对 `toolCall` 函数的支持上。
-
-`core.d.ts` 中的 `toolCall` 函数利用了 `ToolResultMap` 提供了强大的类型推断能力。
-
-```typescript
-// in core.d.ts
-export type ToolReturnType<T extends string> = T extends keyof import('./tool-types').ToolResultMap
-    ? import('./tool-types').ToolResultMap[T]
-    : any;
-
-export declare function toolCall<T extends string>(toolName: T, ...): Promise<ToolReturnType<T>>;
+```ts
+const result = await toolCall('read_file', { path: '/sdcard/a.txt' });
 ```
 
-当你调用 `toolCall` 时，TypeScript 会：
-1.  检查你传入的 `toolName` 字符串。
-2.  在 `ToolResultMap` 中查找这个字符串键。
-3.  如果找到，它就知道 `toolCall` 返回的 `Promise` 将解析为什么类型。
+TypeScript 就会根据 `ToolResultMap['read_file']` 推导出 `result` 的类型。
 
-**实际效果:**
+## 核心接口
 
-```typescript
-/// <reference path="./types/index.d.ts" />
-
-async function example() {
-    // 因为 ToolResultMap['get_page_info'] 是 UIPageResultData，
-    // 所以 TypeScript 知道 pageInfo 变量的类型是 UIPageResultData。
-    const pageInfo = await toolCall('get_page_info');
-
-    // 因此，你可以获得精确的代码补全和类型检查。
-    // a. Correct:
-    console.log(pageInfo.activityName);
-
-    // b. Error: Property 'nonExistentProp' does not exist on type 'UIPageResultData'.
-    // console.log(pageInfo.nonExistentProp);
+```ts
+interface ToolResultMap {
+  [toolName: string]: ResultType
 }
 ```
 
-简而言之，`tool-types.d.ts` 是实现脚本开发环境中**类型安全**和**智能提示**的关键底层文件之一，它通过映射关系连接了“调用”和“结果”。 
+## 当前工具名映射
+
+### 文件操作
+
+- `list_files` → `DirectoryListingData`
+- `read_file` → `FileContentData`
+- `read_file_part` → `FilePartContentData`
+- `read_file_full` → `FileContentData`
+- `read_file_binary` → `BinaryFileContentData`
+- `write_file` → `FileOperationData`
+- `delete_file` → `FileOperationData`
+- `file_exists` → `FileExistsData`
+- `move_file` → `FileOperationData`
+- `copy_file` → `FileOperationData`
+- `make_directory` → `FileOperationData`
+- `find_files` → `FindFilesResultData`
+- `grep_code` → `GrepResultData`
+- `grep_context` → `GrepResultData`
+- `file_info` → `FileInfoData`
+- `zip_files` → `FileOperationData`
+- `unzip_files` → `FileOperationData`
+- `open_file` → `FileOperationData`
+- `share_file` → `FileOperationData`
+- `download_file` → `FileOperationData`
+- `apply_file` → `FileApplyResultData`
+
+### 网络操作
+
+- `http_request` → `HttpResponseData`
+- `visit_web` → `VisitWebResultData`
+- `start_web` → `StringResultData`
+- `stop_web` → `StringResultData`
+- `web_navigate` → `StringResultData`
+- `web_eval` → `StringResultData`
+- `web_click` → `StringResultData`
+- `web_fill` → `StringResultData`
+- `web_wait_for` → `StringResultData`
+- `web_snapshot` → `StringResultData`
+- `web_file_upload` → `StringResultData`
+- `multipart_request` → `HttpResponseData`
+- `manage_cookies` → `HttpResponseData`
+
+### 系统操作
+
+- `sleep` → `SleepResultData`
+- `get_system_setting` → `SystemSettingData`
+- `modify_system_setting` → `SystemSettingData`
+- `toast` → `StringResultData`
+- `send_notification` → `StringResultData`
+- `install_app` → `AppOperationData`
+- `uninstall_app` → `AppOperationData`
+- `list_installed_apps` → `AppListData`
+- `start_app` → `AppOperationData`
+- `stop_app` → `AppOperationData`
+- `device_info` → `DeviceInfoResultData`
+- `get_notifications` → `NotificationData`
+- `get_device_location` → `LocationData`
+- `read_environment_variable` → `StringResultData`
+- `write_environment_variable` → `StringResultData`
+- `list_sandbox_packages` → `StringResultData`
+- `set_sandbox_package_enabled` → `StringResultData`
+- `restart_mcp_with_logs` → `StringResultData`
+- `get_speech_services_config` → `SpeechServicesConfigResultData`
+- `set_speech_services_config` → `SpeechServicesUpdateResultData`
+- `list_model_configs` → `ModelConfigsResultData`
+- `create_model_config` → `ModelConfigCreateResultData`
+- `update_model_config` → `ModelConfigUpdateResultData`
+- `delete_model_config` → `ModelConfigDeleteResultData`
+- `list_function_model_configs` → `FunctionModelConfigsResultData`
+- `get_function_model_config` → `FunctionModelConfigResultData`
+- `set_function_model_config` → `FunctionModelBindingResultData`
+- `test_model_config_connection` → `ModelConfigConnectionTestResultData`
+- `trigger_tasker_event` → `string`
+
+### UI 操作
+
+- `get_page_info` → `UIPageResultData`
+- `click_element` → `UIActionResultData`
+- `tap` → `UIActionResultData`
+- `set_input_text` → `UIActionResultData`
+- `press_key` → `UIActionResultData`
+- `swipe` → `UIActionResultData`
+- `combined_operation` → `CombinedOperationResultData`
+- `run_ui_subagent` → `AutomationExecutionResultData`
+
+### 计算器
+
+- `calculate` → `CalculationResultData`
+
+### 包与记忆
+
+- `use_package` → `string`
+- `query_memory` → `string`
+- `link_memories` → `MemoryLinkResultData`
+- `query_memory_links` → `MemoryLinkQueryResultData`
+
+### FFmpeg
+
+- `ffmpeg_execute` → `FFmpegResultData`
+- `ffmpeg_info` → `FFmpegResultData`
+- `ffmpeg_convert` → `FFmpegResultData`
+
+### ADB / Intent / Terminal
+
+- `execute_shell` → `ADBResultData`
+- `execute_intent` → `IntentResultData`
+- `send_broadcast` → `IntentResultData`
+- `execute_terminal` → `TerminalCommandResultData`
+- `get_terminal_session_screen` → `TerminalSessionScreenResultData`
+
+### 工作流
+
+- `get_all_workflows` → `WorkflowListResultData`
+- `create_workflow` → `WorkflowDetailResultData`
+- `get_workflow` → `WorkflowDetailResultData`
+- `update_workflow` → `WorkflowDetailResultData`
+- `patch_workflow` → `WorkflowDetailResultData`
+- `delete_workflow` → `StringResultData`
+- `trigger_workflow` → `StringResultData`
+
+### Chat Manager
+
+- `start_chat_service` → `ChatServiceStartResultData`
+- `create_new_chat` → `ChatCreationResultData`
+- `list_chats` → `ChatListResultData`
+- `find_chat` → `ChatFindResultData`
+- `agent_status` → `AgentStatusResultData`
+- `switch_chat` → `ChatSwitchResultData`
+- `update_chat_title` → `ChatTitleUpdateResultData`
+- `delete_chat` → `ChatDeleteResultData`
+- `send_message_to_ai` → `MessageSendResultData`
+- `send_message_to_ai_advanced` → `MessageSendResultData`
+- `list_character_cards` → `CharacterCardListResultData`
+- `get_chat_messages` → `ChatMessagesResultData`
+
+## 使用方式
+
+### 让 `toolCall()` 拿到精确返回类型
+
+```ts
+const file = await toolCall('read_file', {
+  path: '/sdcard/demo.txt'
+});
+
+file.content;
+file.size;
+```
+
+### 对象形式调用
+
+```ts
+const page = await toolCall({
+  name: 'get_page_info'
+});
+```
+
+## 注意事项
+
+- `tool-types.d.ts` 只描述**工具名与返回类型的映射**。
+- 参数结构仍然要结合对应模块文档或对应 `.d.ts` 查看。
+- 若某个工具名没有出现在 `ToolResultMap` 中，`toolCall()` 的泛型返回值就可能退化为 `any`。
+
+## 相关文件
+
+- `examples/types/tool-types.d.ts`
+- `examples/types/core.d.ts`
+- `docs/package_dev/results.md`
