@@ -1614,6 +1614,7 @@ open class OpenAIProvider(
     }
 
     private suspend fun processResponsesStreamingEvent(
+        context: Context,
         jsonResponse: JSONObject,
         state: StreamingState,
         emitter: StreamEmitter,
@@ -1732,9 +1733,20 @@ open class OpenAIProvider(
 
             "response.failed", "response.error" -> {
                 val error = jsonResponse.optJSONObject("error")
-                if (error != null) {
-                    AppLogger.w("AIService", "Responses流式事件错误: ${error.optString("message", "")}")
-                }
+                val responseObj = jsonResponse.optJSONObject("response")
+                val errorMessage =
+                    error?.optString("message", "")
+                        ?.takeIf { it.isNotBlank() }
+                        ?: responseObj?.optJSONObject("error")
+                            ?.optString("message", "")
+                            ?.takeIf { it.isNotBlank() }
+                        ?: responseObj?.optString("status", "")
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let { "Responses stream failed with status: $it" }
+                        ?: "Responses stream returned $eventType"
+
+                AppLogger.w("AIService", "Responses流式事件错误: $errorMessage")
+                throw IOException(context.getString(R.string.openai_error_response_failed, errorMessage))
             }
         }
     }
@@ -1925,7 +1937,7 @@ open class OpenAIProvider(
                     val jsonResponse = JSONObject(data)
 
                     if (useResponsesApi) {
-                        processResponsesStreamingEvent(jsonResponse, state, emitter, onTokensUpdated)
+                        processResponsesStreamingEvent(context, jsonResponse, state, emitter, onTokensUpdated)
                         continue
                     }
 
@@ -1936,6 +1948,8 @@ open class OpenAIProvider(
                         }
                     }
                     processResponseChunk(jsonResponse, state, emitter, onTokensUpdated)
+                } catch (e: IOException) {
+                    throw e
                 } catch (e: Exception) {
                     AppLogger.w("AIService", "【发送消息】JSON解析错误: ${e.message}")
                     logLargeString("AIService", data, "[Send message] Original data when JSON parsing failed: ")
