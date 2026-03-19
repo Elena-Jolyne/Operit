@@ -150,6 +150,15 @@ object GitIgnoreFilter {
 
         return false
     }
+
+    /**
+     * 检查目录在遍历时是否应该继续进入。
+     * 返回 false 时调用方应直接跳过该目录，避免无意义的深层遍历。
+     */
+    fun shouldEnterDirectory(directory: File, workspaceDir: File, rules: List<String>): Boolean {
+        if (!directory.isDirectory) return false
+        return !shouldIgnore(directory, workspaceDir, rules)
+    }
     
     /**
      * 匹配单个 gitignore 规则
@@ -235,4 +244,3 @@ object GitIgnoreFilter {
         }
     }
 }
-

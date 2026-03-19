@@ -92,6 +92,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
 
     companion object {
         private const val TAG = "ChatViewModel"
+        private const val MIN_WORKSPACE_FILE_QUERY_LENGTH = 2
     }
 
     // 添加语音服务
@@ -1155,14 +1156,19 @@ class ChatViewModel(private val context: Context) : ViewModel() {
         val lastAt = message.lastIndexOf('@')
         if (isWorkspaceOpen.value && lastAt != -1) {
             val substringAfterAt = message.substring(lastAt + 1)
-            if (substringAfterAt.contains(' ')) {
-                // 如果@后面有空格，则认为提及结束，隐藏选择器并清空搜索词
+            if (substringAfterAt.any(Char::isWhitespace)) {
+                // 如果@后面出现空白字符，则认为提及结束，隐藏选择器并清空搜索词
                 _showWorkspaceFileSelector.value = false
                 _workspaceFileSearchQuery.value = ""
             } else {
-                // 如果@后面没有空格，则显示选择器，并更新搜索词
-                _showWorkspaceFileSelector.value = true
-                _workspaceFileSearchQuery.value = substringAfterAt
+                val normalizedQuery = substringAfterAt.trim()
+                if (normalizedQuery.length >= MIN_WORKSPACE_FILE_QUERY_LENGTH) {
+                    _showWorkspaceFileSelector.value = true
+                    _workspaceFileSearchQuery.value = normalizedQuery
+                } else {
+                    _showWorkspaceFileSelector.value = false
+                    _workspaceFileSearchQuery.value = ""
+                }
             }
         } else {
             // 如果没有@或者工作区未打开，则隐藏并清空
