@@ -1,8 +1,10 @@
 package com.ai.assistance.operit.ui.features.chat.components
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.net.Uri
-import com.ai.assistance.operit.util.AppLogger
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -52,6 +54,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -67,10 +70,12 @@ import androidx.compose.ui.window.PopupProperties
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.core.tools.AIToolHandler
 import com.ai.assistance.operit.services.core.AttachmentDelegate
+import com.ai.assistance.operit.util.AppLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 
 /** 简约风格的附件选择器组件 */
@@ -90,6 +95,10 @@ fun AttachmentSelectorPanel(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val launchCameraCapture = rememberCameraCaptureLauncher(
+        onTakePhoto = onTakePhoto,
+        onDismiss = onDismiss,
+    )
 
     // 获取AttachmentDelegate实例
     val attachmentManager = remember {
@@ -125,28 +134,6 @@ fun AttachmentSelectorPanel(
                 onDismiss()
             }
         }
-    }
-
-    var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
-    val takePictureLauncher =
-            rememberLauncherForActivityResult(contract = ActivityResultContracts.TakePicture()) { success ->
-                if (success) {
-                    tempCameraUri?.let {
-                        onTakePhoto(it)
-                        onDismiss()
-                    }
-                }
-            }
-
-    fun getTmpFileUri(context: Context): Uri {
-        // authority需要与AndroidManifest.xml中provider的authorities一致
-        val authority = "${context.applicationContext.packageName}.fileprovider"
-        val tmpFile =
-                File.createTempFile("temp_image_", ".jpg", context.cacheDir).apply {
-                    createNewFile()
-                    deleteOnExit()
-                }
-        return FileProvider.getUriForFile(context, authority, tmpFile)
     }
 
     // 附件选择面板 - 使用展开动画，从下方向上展开
@@ -193,11 +180,7 @@ fun AttachmentSelectorPanel(
                                 AttachmentPanelItem(
                                         icon = Icons.Default.PhotoCamera,
                                         label = context.getString(R.string.attachment_camera),
-                                        onClick = {
-                                            val uri = getTmpFileUri(context)
-                                            tempCameraUri = uri
-                                            takePictureLauncher.launch(uri)
-                                        }
+                                        onClick = launchCameraCapture
                                 ),
                                 AttachmentPanelItem(
                                         icon = Icons.Default.Memory,
@@ -346,6 +329,10 @@ fun AttachmentSelectorPopupPanel(
 
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val launchCameraCapture = rememberCameraCaptureLauncher(
+            onTakePhoto = onTakePhoto,
+            onDismiss = onDismiss,
+    )
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
             contract = ActivityResultContracts.GetMultipleContents()
@@ -377,27 +364,6 @@ fun AttachmentSelectorPopupPanel(
         }
     }
 
-    var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
-    val takePictureLauncher =
-            rememberLauncherForActivityResult(contract = ActivityResultContracts.TakePicture()) { success ->
-                if (success) {
-                    tempCameraUri?.let {
-                        onTakePhoto(it)
-                        onDismiss()
-                    }
-                }
-            }
-
-    fun getTmpFileUri(context: Context): Uri {
-        val authority = "${context.applicationContext.packageName}.fileprovider"
-        val tmpFile =
-                File.createTempFile("temp_image_", ".jpg", context.cacheDir).apply {
-                    createNewFile()
-                    deleteOnExit()
-                }
-        return FileProvider.getUriForFile(context, authority, tmpFile)
-    }
-
     val panelItems =
             listOf(
                     AttachmentPanelItem(
@@ -408,11 +374,7 @@ fun AttachmentSelectorPopupPanel(
                     AttachmentPanelItem(
                             icon = Icons.Default.PhotoCamera,
                             label = context.getString(R.string.attachment_camera),
-                            onClick = {
-                                val uri = getTmpFileUri(context)
-                                tempCameraUri = uri
-                                takePictureLauncher.launch(uri)
-                            }
+                            onClick = launchCameraCapture
                     ),
                     AttachmentPanelItem(
                             icon = Icons.Default.Memory,
@@ -532,6 +494,68 @@ private data class AttachmentPanelItem(
         val label: String,
         val onClick: () -> Unit
 )
+
+@Composable
+private fun rememberCameraCaptureLauncher(
+        onTakePhoto: (Uri) -> Unit,
+        onDismiss: () -> Unit
+): () -> Unit {
+    val context = LocalContext.current
+    val latestOnTakePhoto by rememberUpdatedState(onTakePhoto)
+    val latestOnDismiss by rememberUpdatedState(onDismiss)
+    var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
+
+    val takePictureLauncher =
+            rememberLauncherForActivityResult(contract = ActivityResultContracts.TakePicture()) { success ->
+                val capturedUri = tempCameraUri
+                tempCameraUri = null
+                if (success && capturedUri != null) {
+                    latestOnTakePhoto(capturedUri)
+                    latestOnDismiss()
+                }
+            }
+
+    fun launchCameraCapture() {
+        val uri = createTempCameraUri(context)
+        tempCameraUri = uri
+        takePictureLauncher.launch(uri)
+    }
+
+    val requestCameraPermissionLauncher =
+            rememberLauncherForActivityResult(contract = ActivityResultContracts.RequestPermission()) { isGranted ->
+                if (isGranted) {
+                    launchCameraCapture()
+                } else {
+                    Toast.makeText(
+                                    context,
+                                    context.getString(R.string.camera_permission_denied_toast),
+                                    Toast.LENGTH_SHORT
+                            )
+                            .show()
+                }
+            }
+
+    return {
+        val hasCameraPermission =
+                ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+                        PackageManager.PERMISSION_GRANTED
+        if (hasCameraPermission) {
+            launchCameraCapture()
+        } else {
+            requestCameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+}
+
+private fun createTempCameraUri(context: Context): Uri {
+    val authority = "${context.applicationContext.packageName}.fileprovider"
+    val tmpFile =
+            File.createTempFile("temp_image_", ".jpg", context.cacheDir).apply {
+                createNewFile()
+                deleteOnExit()
+            }
+    return FileProvider.getUriForFile(context, authority, tmpFile)
+}
 
 // 添加Uri转换为文件路径的工具函数
 private suspend fun getFilePathFromUri(context: Context, uri: Uri): String? = withContext(Dispatchers.IO) {

@@ -105,7 +105,7 @@ object VoiceListFetcher {
                 else -> root.optJSONArray("voices") ?: root.optJSONArray("data")
             } ?: return emptyList()
 
-            buildList {
+            val parsedVoices = buildList {
                 for (i in 0 until arr.length()) {
                     val obj = arr.optJSONObject(i) ?: continue
                     val id = obj.optString("id").ifBlank { obj.optString("voice") }
@@ -116,8 +116,52 @@ object VoiceListFetcher {
                     add(VoiceService.Voice(id = id, name = name, locale = locale, gender = gender))
                 }
             }
+
+            dedupeVoicesById(parsedVoices)
         } catch (_: Exception) {
             emptyList()
         }
+    }
+
+    private fun dedupeVoicesById(voices: List<VoiceService.Voice>): List<VoiceService.Voice> {
+        if (voices.isEmpty()) return emptyList()
+
+        val deduped = linkedMapOf<String, VoiceService.Voice>()
+        var duplicateCount = 0
+
+        for (voice in voices) {
+            val existing = deduped[voice.id]
+            if (existing == null) {
+                deduped[voice.id] = voice
+                continue
+            }
+
+            duplicateCount++
+            deduped[voice.id] = preferRicherVoice(existing, voice)
+        }
+
+        if (duplicateCount > 0) {
+            AppLogger.w(
+                TAG,
+                "Voice list contains duplicate ids. Removed duplicates: count=$duplicateCount, unique=${deduped.size}"
+            )
+        }
+
+        return deduped.values.toList()
+    }
+
+    private fun preferRicherVoice(
+        current: VoiceService.Voice,
+        incoming: VoiceService.Voice
+    ): VoiceService.Voice {
+        fun score(voice: VoiceService.Voice): Int {
+            var score = 0
+            if (voice.name.isNotBlank() && voice.name != voice.id) score += 2
+            if (voice.locale.isNotBlank()) score += 1
+            if (voice.gender.isNotBlank()) score += 1
+            return score
+        }
+
+        return if (score(incoming) > score(current)) incoming else current
     }
 }

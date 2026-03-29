@@ -40,6 +40,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlin.coroutines.coroutineContext
 
 /**
  * 消息协调委托类
@@ -77,6 +78,7 @@ class MessageCoordinationDelegate(
 
     // 保存总结任务的 Job 引用，用于取消
     private var summaryJob: Job? = null
+    private var sendTriggeredSummaryJob: Job? = null
 
     // 保存当前的 promptFunctionType，用于自动继续时保持提示词一致性
     private var currentPromptFunctionType: PromptFunctionType = PromptFunctionType.CHAT
@@ -959,24 +961,66 @@ class MessageCoordinationDelegate(
     /**
      * 取消正在进行的总结操作
      */
-    fun cancelSummary() {
-        if (_isSummarizing.value) {
-            AppLogger.d(TAG, "取消正在进行的总结操作")
-            val targetChatId = _summarizingChatId.value
-            summaryJob?.cancel()
+    private suspend fun cancelSummaryInternal(targetChatId: String? = null) {
+        val shouldCancelSummary =
+            _isSummarizing.value &&
+                (targetChatId == null || _summarizingChatId.value == targetChatId)
+        val shouldCancelAsyncSummary =
+            _isSendTriggeredSummarizing.value &&
+                (targetChatId == null || _sendTriggeredSummarizingChatId.value == targetChatId)
+
+        if (!shouldCancelSummary && !shouldCancelAsyncSummary) {
+            return
+        }
+
+        AppLogger.d(TAG, "取消正在进行的总结操作: chatId=$targetChatId")
+
+        val affectedChatIds = linkedSetOf<String>()
+        val jobsToCancel = linkedSetOf<Job>()
+
+        if (shouldCancelSummary) {
+            _summarizingChatId.value?.let { affectedChatIds.add(it) }
+            summaryJob?.let { jobsToCancel.add(it) }
             summaryJob = null
             _isSummarizing.value = false
             _summarizingChatId.value = null
-            // 重置状态
-            messageProcessingDelegate.resetLoadingState()
-            if (targetChatId != null) {
-                messageProcessingDelegate.setSuppressIdleCompletedStateForChat(targetChatId, false)
-                messageProcessingDelegate.setInputProcessingStateForChat(
-                    targetChatId,
-                    InputProcessingState.Idle
-                )
+        }
+
+        if (shouldCancelAsyncSummary) {
+            _sendTriggeredSummarizingChatId.value?.let { affectedChatIds.add(it) }
+            sendTriggeredSummaryJob?.let { jobsToCancel.add(it) }
+            sendTriggeredSummaryJob = null
+            _isSendTriggeredSummarizing.value = false
+            _sendTriggeredSummarizingChatId.value = null
+        }
+
+        jobsToCancel.forEach { job -> job.cancel() }
+        jobsToCancel.forEach { job ->
+            try {
+                job.join()
+            } catch (_: CancellationException) {
             }
         }
+
+        messageProcessingDelegate.resetLoadingState()
+        affectedChatIds.forEach { chatId ->
+            messageProcessingDelegate.setPendingAsyncSummaryUiForChat(chatId, false)
+            messageProcessingDelegate.setSuppressIdleCompletedStateForChat(chatId, false)
+            messageProcessingDelegate.setInputProcessingStateForChat(
+                chatId,
+                InputProcessingState.Idle
+            )
+        }
+    }
+
+    fun cancelSummary() {
+        coroutineScope.launch {
+            cancelSummaryInternal()
+        }
+    }
+
+    suspend fun cancelSummaryForDestructiveMutation(chatId: String) {
+        cancelSummaryInternal(chatId)
     }
 
     private fun launchAsyncSummaryForSend(
@@ -1000,7 +1044,8 @@ class MessageCoordinationDelegate(
             InputProcessingState.Summarizing(context.getString(R.string.chat_compressing_history))
         )
 
-        coroutineScope.launch {
+        val asyncSummaryJob =
+            coroutineScope.launch {
             try {
                 val service = getEnhancedAiService() ?: return@launch
 
@@ -1091,8 +1136,13 @@ class MessageCoordinationDelegate(
                         InputProcessingState.Idle
                     )
                 }
+                val currentJob = coroutineContext[Job]
+                if (currentJob != null && sendTriggeredSummaryJob === currentJob) {
+                    sendTriggeredSummaryJob = null
+                }
             }
         }
+        sendTriggeredSummaryJob = asyncSummaryJob
     }
 
     /**

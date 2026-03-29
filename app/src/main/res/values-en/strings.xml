@@ -4631,6 +4631,7 @@
     <string name="token_limit_warning">Token Limit Warning</string>
     <string name="token_limit_warning_message">The message has exceeded the token limit. Continuing to send may result in context loss or AI being unable to understand. Continue?</string>
     <string name="continue_send">Continue Send</string>
+    <string name="camera_permission_denied_toast">Camera permission denied</string>
     <string name="microphone_permission_denied_toast">Microphone permission denied</string>
     <string name="executing_tool">Executing tool: %1$s</string>
     <string name="processing_tool_result">Processing tool result: %1$s</string>

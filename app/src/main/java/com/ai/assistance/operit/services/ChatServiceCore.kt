@@ -186,6 +186,11 @@ class ChatServiceCore(
             uiBridge = uiBridge
         )
 
+        chatHistoryDelegate.setBeforeDestructiveHistoryMutation { chatId ->
+            messageCoordinationDelegate.cancelSummaryForDestructiveMutation(chatId)
+            messageProcessingDelegate.cancelMessageForDestructiveMutation(chatId)
+        }
+
         initialized = true
         AppLogger.d(TAG, "所有委托已初始化")
     }

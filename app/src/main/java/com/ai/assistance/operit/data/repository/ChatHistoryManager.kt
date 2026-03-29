@@ -641,6 +641,18 @@ class ChatHistoryManager private constructor(private val context: Context) {
         }
     }
 
+    suspend fun canDeleteChatHistory(chatId: String): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                val chat = chatDao.getChatById(chatId)
+                chat != null && chat.locked != true
+            } catch (e: Exception) {
+                AppLogger.e(TAG, "Failed to check whether chat $chatId can be deleted", e)
+                false
+            }
+        }
+    }
+
     // 删除聊天历史
     suspend fun deleteChatHistory(chatId: String): Boolean {
         chatMutex(chatId).withLock {

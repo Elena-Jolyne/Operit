@@ -235,7 +235,8 @@ class FloatingFullscreenModeViewModel(
         val sb = StringBuilder()
         var isFirstSentence = true
         var isFirstChar = true
-        val endChars = ".,!?;:，。！？；：\n"
+        // 流式朗读只在较强的句边界切分，逗号不参与断句，避免语气被打断。
+        val endChars = ".!?;:。！？；：\n"
         
         XmlTextProcessor.processStreamToText(stream).collect { char ->
             if (isFirstChar) {

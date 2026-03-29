@@ -47,6 +47,7 @@ class ChatHistoryDelegate(
     private val isInitialized = AtomicBoolean(false)
     private val historyUpdateMutex = Mutex()
     private val allowAddMessage = AtomicBoolean(true) // 控制是否允许添加消息，切换对话时设为false
+    private var beforeDestructiveHistoryMutation: (suspend (String) -> Unit)? = null
 
     private var pendingPersistChatOrderJob: Job? = null
 
@@ -56,6 +57,14 @@ class ChatHistoryDelegate(
     // State flows
     private val _chatHistory = MutableStateFlow<List<ChatMessage>>(emptyList())
     val chatHistory: StateFlow<List<ChatMessage>> = _chatHistory.asStateFlow()
+
+    fun setBeforeDestructiveHistoryMutation(handler: suspend (String) -> Unit) {
+        beforeDestructiveHistoryMutation = handler
+    }
+
+    private suspend fun prepareChatForDestructiveMutation(chatId: String) {
+        beforeDestructiveHistoryMutation?.invoke(chatId)
+    }
 
     suspend fun getChatHistory(chatId: String): List<ChatMessage> {
         return if (chatId == _currentChatId.value) {
@@ -504,6 +513,11 @@ class ChatHistoryDelegate(
     /** 删除聊天历史 */
     fun deleteChatHistory(chatId: String, onResult: (Boolean) -> Unit = {}) {
         coroutineScope.launch {
+            if (!chatHistoryManager.canDeleteChatHistory(chatId)) {
+                onResult(false)
+                return@launch
+            }
+            prepareChatForDestructiveMutation(chatId)
             val deleted =
                 if (chatId == _currentChatId.value) {
                     val ok = chatHistoryManager.deleteChatHistory(chatId)
@@ -582,6 +596,11 @@ class ChatHistoryDelegate(
                 return@launch
             }
 
+            if (!chatHistoryManager.canDeleteChatHistory(chatId)) {
+                onResult(false)
+                return@launch
+            }
+            prepareChatForDestructiveMutation(chatId)
             val deleted = chatHistoryManager.deleteChatHistory(chatId)
             if (deleted) {
                 createNewChat()
@@ -800,22 +819,32 @@ class ChatHistoryDelegate(
      * @param timestampOfFirstDeletedMessage 用于删除数据库记录的起始时间戳。如果为null，则清空所有消息。
      */
     suspend fun truncateChatHistory(newHistory: List<ChatMessage>, timestampOfFirstDeletedMessage: Long?) {
-        historyUpdateMutex.withLock {
-            _currentChatId.value?.let { chatId ->
-                if (timestampOfFirstDeletedMessage != null) {
-                    // 从数据库中删除指定时间戳之后的消息
-                    chatHistoryManager.deleteMessagesFrom(
-                            chatId,
-                            timestampOfFirstDeletedMessage
-                    )
-                } else {
-                    // 如果时间戳为空，则清除该聊天的所有消息
-                    chatHistoryManager.clearChatMessages(chatId)
-                }
+        val chatIdSnapshot = _currentChatId.value ?: return
+        prepareChatForDestructiveMutation(chatIdSnapshot)
 
-                // 更新内存中的聊天记录
-                _chatHistory.value = newHistory
+        historyUpdateMutex.withLock {
+            val currentChatId = _currentChatId.value
+            if (currentChatId != chatIdSnapshot) {
+                AppLogger.w(
+                    TAG,
+                    "截断聊天历史时当前会话已变化，放弃操作: expected=$chatIdSnapshot, actual=$currentChatId"
+                )
+                return@withLock
             }
+
+            if (timestampOfFirstDeletedMessage != null) {
+                // 从数据库中删除指定时间戳之后的消息
+                chatHistoryManager.deleteMessagesFrom(
+                        chatIdSnapshot,
+                        timestampOfFirstDeletedMessage
+                )
+            } else {
+                // 如果时间戳为空，则清除该聊天的所有消息
+                chatHistoryManager.clearChatMessages(chatIdSnapshot)
+            }
+
+            // 更新内存中的聊天记录
+            _chatHistory.value = newHistory
         }
     }
 

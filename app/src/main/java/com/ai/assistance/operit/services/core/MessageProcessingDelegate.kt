@@ -49,6 +49,7 @@ import kotlinx.coroutines.sync.withLock
 import com.ai.assistance.operit.core.tools.ToolProgressBus
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
+import kotlin.coroutines.coroutineContext
 
 /** 委托类，负责处理消息处理相关功能 */
 class MessageProcessingDelegate(
@@ -110,6 +111,7 @@ class MessageProcessingDelegate(
 
     // 当前活跃的AI响应流
     private data class ChatRuntime(
+        var sendJob: Job? = null,
         var responseStream: SharedStream<String>? = null,
         var streamCollectionJob: Job? = null,
         var stateCollectionJob: Job? = null,
@@ -259,25 +261,50 @@ class MessageProcessingDelegate(
         }
     }
 
+    private suspend fun cancelMessageInternal(chatId: String, keepPartialResponse: Boolean) {
+        val chatRuntime = runtimeFor(chatId)
+        val jobsToCancel =
+            linkedSetOf<Job>().apply {
+                chatRuntime.sendJob?.let { add(it) }
+                chatRuntime.stateCollectionJob?.let { add(it) }
+                chatRuntime.streamCollectionJob?.let { add(it) }
+            }
+
+        clearCurrentTurnToolInvocationCount(chatId)
+        AIMessageManager.cancelOperation(chatId)
+
+        jobsToCancel.forEach { job -> job.cancel() }
+        jobsToCancel.forEach { job ->
+            try {
+                job.join()
+            } catch (_: kotlinx.coroutines.CancellationException) {
+            }
+        }
+
+        chatRuntime.sendJob = null
+        chatRuntime.stateCollectionJob = null
+        chatRuntime.streamCollectionJob = null
+
+        if (keepPartialResponse) {
+            detachStreamingAiMessage(chatId)
+        }
+
+        chatRuntime.responseStream = null
+        chatRuntime.isLoading.value = false
+        updateGlobalLoadingState()
+        setChatInputProcessingState(chatId, EnhancedInputProcessingState.Idle)
+
+        withContext(Dispatchers.IO) { saveCurrentChat() }
+    }
+
     fun cancelMessage(chatId: String) {
         coroutineScope.launch {
-            val chatRuntime = runtimeFor(chatId)
-            chatRuntime.stateCollectionJob?.cancel()
-            chatRuntime.stateCollectionJob = null
-            chatRuntime.streamCollectionJob?.cancel()
-            chatRuntime.streamCollectionJob = null
-            clearCurrentTurnToolInvocationCount(chatId)
-
-            AIMessageManager.cancelOperation(chatId)
-            detachStreamingAiMessage(chatId)
-
-            chatRuntime.responseStream = null
-            chatRuntime.isLoading.value = false
-            updateGlobalLoadingState()
-            setChatInputProcessingState(chatId, EnhancedInputProcessingState.Idle)
-
-            withContext(Dispatchers.IO) { saveCurrentChat() }
+            cancelMessageInternal(chatId, keepPartialResponse = true)
         }
+    }
+
+    suspend fun cancelMessageForDestructiveMutation(chatId: String) {
+        cancelMessageInternal(chatId, keepPartialResponse = false)
     }
 
     init {
@@ -375,7 +402,8 @@ class MessageProcessingDelegate(
         updateGlobalLoadingState()
         setChatInputProcessingState(chatId, EnhancedInputProcessingState.Processing(context.getString(R.string.message_processing)))
 
-        coroutineScope.launch(Dispatchers.IO) {
+        val sendJob =
+            coroutineScope.launch(Dispatchers.IO) {
             val sendUserMessageStartTime = messageTimingNow()
             // 检查这是否是聊天中的第一条用户消息（忽略AI的开场白）
             val isFirstMessage = getChatHistory(chatId).none { it.sender == "user" }
@@ -722,7 +750,8 @@ class MessageProcessingDelegate(
                             val revisionMutex = Mutex()
                             val autoReadBuffer = StringBuilder()
                             var isFirstAutoReadSegment = true
-                            val endChars = ".,!?;:，。！？；：\n"
+                            // 流式自动朗读只在较强的句边界切分，逗号不参与断句，避免语气被打断。
+                            val endChars = ".!?;:。！？；：\n"
                             val autoReadStream = XmlTextProcessor.processStreamToText(sharedCharStream)
                             val revisableStream = sharedCharStream as? TextStreamEventCarrier
 
@@ -939,8 +968,13 @@ class MessageProcessingDelegate(
                     startTimeMs = sendUserMessageStartTime,
                     details = "chatId=$activeChatId, addedUserMessage=$userMessageAdded, enableSummary=$enableSummary"
                 )
+                val currentJob = coroutineContext[Job]
+                if (currentJob != null && chatRuntime.sendJob === currentJob) {
+                    chatRuntime.sendJob = null
+                }
             }
         }
+        chatRuntime.sendJob = sendJob
     }
 
     private fun notifyTurnComplete(

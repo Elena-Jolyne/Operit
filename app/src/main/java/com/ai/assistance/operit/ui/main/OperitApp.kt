@@ -150,7 +150,7 @@ fun OperitApp(initialNavItem: NavItem = NavItem.AiChat, toolHandler: AIToolHandl
     var isLoading by remember { mutableStateOf(false) }
 
     // Tablet mode sidebar state
-    var isTabletSidebarExpanded by remember { mutableStateOf(true) }
+    var isTabletSidebarExpanded by remember { mutableStateOf(false) }
     var tabletSidebarWidth by remember { mutableStateOf(280.dp) } // 侧边栏默认宽度
     val collapsedTabletSidebarWidth = 64.dp // 收起时的宽度
 

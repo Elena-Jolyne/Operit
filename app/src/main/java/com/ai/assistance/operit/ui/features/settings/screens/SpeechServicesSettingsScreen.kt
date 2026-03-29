@@ -1213,7 +1213,9 @@ fun SpeechServicesSettingsScreen(
                                 }
 
                                 val effectiveOpenAiVoices = remember(openAiVoices, builtinOpenAiVoices) {
-                                    if (openAiVoices.isNotEmpty()) openAiVoices else builtinOpenAiVoices
+                                    val sourceVoices =
+                                        if (openAiVoices.isNotEmpty()) openAiVoices else builtinOpenAiVoices
+                                    sourceVoices.distinctBy { it.id }
                                 }
 
                                 val filteredOpenAiVoices = remember(effectiveOpenAiVoices, openAiVoiceSearchQuery) {
