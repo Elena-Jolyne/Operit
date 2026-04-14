@@ -1595,7 +1595,7 @@ private fun AgentThinkingSettingsItem(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .height(36.dp)
+                .heightIn(min = 36.dp)
                 .clickable { onExpandedChange(!expanded) }
                 .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1625,6 +1625,8 @@ private fun AgentThinkingSettingsItem(
             text = thinkingTypeText,
             fontSize = 13.sp,
             color = MaterialTheme.colorScheme.primary,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.weight(1f),
         )
@@ -1777,7 +1779,7 @@ private fun AgentThinkingSubSettingItem(
                     onValueChange = { onToggle() },
                     role = Role.Switch,
                 )
-                .height(36.dp)
+                .heightIn(min = 36.dp)
                 .padding(horizontal = 8.dp),
     ) {
         Row(
@@ -1802,6 +1804,8 @@ private fun AgentThinkingSubSettingItem(
                 text = title,
                 fontSize = 13.sp,
                 fontWeight = if (isChecked) FontWeight.Bold else FontWeight.Normal,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
                 color =
                     if (isChecked) {
                         MaterialTheme.colorScheme.primary
@@ -1836,7 +1840,7 @@ private fun AgentMaxContextSettingItem(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .height(36.dp)
+                .heightIn(min = 36.dp)
                 .padding(horizontal = 12.dp)
                 .toggleable(
                     value = enableMaxContextMode,
@@ -1869,6 +1873,8 @@ private fun AgentMaxContextSettingItem(
             text = stringResource(R.string.max_mode_title),
             fontSize = 13.sp,
             color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
         Switch(
@@ -1919,7 +1925,7 @@ private fun AgentModelSelectorItem(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .height(36.dp)
+                .heightIn(min = 36.dp)
                 .then(
                     if (allowCollapse) {
                         Modifier.clickable { onExpandedChange(!expanded) }
@@ -1955,7 +1961,7 @@ private fun AgentModelSelectorItem(
             text = currentModelName.ifEmpty { stringResource(R.string.not_selected) },
             fontSize = 13.sp,
             color = MaterialTheme.colorScheme.primary,
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.weight(1f),
@@ -2034,7 +2040,7 @@ private fun AgentModelSelectorItem(
                                             MaterialTheme.colorScheme.onSurface
                                         },
                                     fontSize = 13.sp,
-                                    maxLines = 1,
+                                    maxLines = 2,
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f),
                                 )
@@ -2063,7 +2069,7 @@ private fun AgentModelSelectorItem(
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         fontSize = 11.sp,
-                                        maxLines = 1,
+                                        maxLines = 2,
                                         overflow = TextOverflow.Ellipsis,
                                     )
                                 }
@@ -2120,7 +2126,7 @@ private fun AgentModelSelectorItem(
                                                 } else {
                                                     MaterialTheme.colorScheme.onSurface
                                                 },
-                                            maxLines = 1,
+                                            maxLines = 2,
                                             overflow = TextOverflow.Ellipsis,
                                         )
                                     }
@@ -2432,7 +2438,7 @@ private fun AgentMemorySelectorItem(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .height(36.dp)
+                .heightIn(min = 36.dp)
                 .clickable { onExpandedChange(!expanded) }
                 .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -2462,7 +2468,7 @@ private fun AgentMemorySelectorItem(
             text = currentProfileName,
             fontSize = 13.sp,
             color = MaterialTheme.colorScheme.primary,
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.weight(1f),
@@ -2510,7 +2516,7 @@ private fun AgentMemorySelectorItem(
                                 MaterialTheme.colorScheme.onSurface
                             },
                         fontSize = 13.sp,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
@@ -2573,7 +2579,7 @@ private fun AgentDisableSettingsGroupItem(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .height(36.dp)
+                .heightIn(min = 36.dp)
                 .clickable { onExpandedChange(!expanded) }
                 .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -2689,7 +2695,7 @@ private fun AgentSimpleToggleSettingItem(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .height(36.dp)
+                .heightIn(min = 36.dp)
                 .toggleable(
                     value = isChecked,
                     enabled = isEnabled,
@@ -2724,6 +2730,8 @@ private fun AgentSimpleToggleSettingItem(
         Text(
             text = title,
             fontSize = 13.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
             color =
                 if (isEnabled) MaterialTheme.colorScheme.onSurface
                 else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
@@ -2756,7 +2764,7 @@ private fun AgentActionSettingItem(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .height(36.dp)
+                .heightIn(min = 36.dp)
                 .clickable(onClick = onClick)
                 .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -2779,6 +2787,8 @@ private fun AgentActionSettingItem(
         Text(
             text = title,
             fontSize = 13.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
         )

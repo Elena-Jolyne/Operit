@@ -46,6 +46,10 @@ const SandboxPackageDevInstaller = (function () {
     {
       url: `${CDN_BASE}/docs/SCRIPT_DEV_GUIDE.md`,
       destination: `${REFERENCES_DIR}/SCRIPT_DEV_GUIDE.md`
+    },
+    {
+      url: `${CDN_BASE}/docs/TOOLPKG_FORMAT_GUIDE.md`,
+      destination: `${REFERENCES_DIR}/TOOLPKG_FORMAT_GUIDE.md`
     }
   ].concat(
     TYPE_FILES.map((fileName) => ({

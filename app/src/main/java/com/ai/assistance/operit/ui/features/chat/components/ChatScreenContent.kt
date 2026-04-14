@@ -165,6 +165,7 @@ fun ChatScreenContent(
     var pendingRewindContent by remember { mutableStateOf<String?>(null) }
     var rollbackPreview by remember { mutableStateOf<List<WorkspaceBackupManager.WorkspaceFileChange>>(emptyList()) }
     var rewindPreview by remember { mutableStateOf<List<WorkspaceBackupManager.WorkspaceFileChange>>(emptyList()) }
+    var hasHiddenNewerMessages by remember { mutableStateOf(false) }
     
     // 监听朗读状态
     val isPlaying by actualViewModel.isPlaying.collectAsState()
@@ -201,6 +202,7 @@ fun ChatScreenContent(
             Box(modifier = Modifier.fillMaxSize()) {
                 ChatArea(
                         chatHistory = chatHistory,
+                        currentChatId = currentChatId,
                         scrollState = scrollState,
                         isLoading = isLoading,
                         enableDialogs = enableMessageDialogs,
@@ -224,6 +226,8 @@ fun ChatScreenContent(
                         onCreateBranch = { timestamp -> actualViewModel.createBranch(timestamp) }, // 添加创建分支回调
                         onInsertSummary = { index, message -> actualViewModel.insertSummary(index, message) }, // 添加插入总结回调
                         onMentionRoleFromAvatar = { roleName -> actualViewModel.insertRoleMention(roleName) },
+                        autoScrollToBottom = autoScrollToBottom,
+                        onHasHiddenNewerMessagesChange = { hasHiddenNewerMessages = it },
                         onAutoScrollToBottomChange = onAutoScrollToBottomChange,
                         topPadding = headerHeight,
                         bottomPadding = bottomInset,
@@ -285,6 +289,7 @@ fun ChatScreenContent(
                 )
                 ChatArea(
                         chatHistory = chatHistory,
+                        currentChatId = currentChatId,
                         scrollState = scrollState,
                         isLoading = isLoading,
                         enableDialogs = enableMessageDialogs,
@@ -308,6 +313,8 @@ fun ChatScreenContent(
                         onInsertSummary = { index, message -> actualViewModel.insertSummary(index, message) }, // 添加插入总结回调
                         onAutoReadMessage = { content -> actualViewModel.enableAutoReadAndSpeak(content) }, // 添加自动朗读回调
                         onMentionRoleFromAvatar = { roleName -> actualViewModel.insertRoleMention(roleName) },
+                        autoScrollToBottom = autoScrollToBottom,
+                        onHasHiddenNewerMessagesChange = { hasHiddenNewerMessages = it },
                         onAutoScrollToBottomChange = onAutoScrollToBottomChange,
                         bottomPadding = bottomInset,
                         chatStyle = chatStyle, // Pass chat style
@@ -601,6 +608,7 @@ fun ChatScreenContent(
             scrollState = scrollState,
             coroutineScope = coroutineScope,
             autoScrollToBottom = autoScrollToBottom,
+            hasHiddenNewerMessages = hasHiddenNewerMessages,
             onAutoScrollToBottomChange = onAutoScrollToBottomChange,
             modifier = Modifier
                 .align(Alignment.BottomCenter)

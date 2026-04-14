@@ -2,11 +2,11 @@ import type { ExecutionGraph } from "./plan-models";
 import { parseExecutionGraph } from "./plan-parser";
 import { TaskExecutor } from "./task-executor";
 import { resolveDeepSearchI18n } from "../i18n";
+import { createPromptTurn, toKotlinPromptTurnList, type PromptTurn } from "../prompt-turns";
 
 const EnhancedAIService = Java.com.ai.assistance.operit.api.chat.EnhancedAIService;
 const FunctionType = Java.com.ai.assistance.operit.data.model.FunctionType;
 const Unit = Java.kotlin.Unit;
-const Pair = Java.kotlin.Pair;
 const Collections = Java.java.util.Collections;
 const InputProcessingStateBase = "com.ai.assistance.operit.data.model.InputProcessingState$";
 
@@ -39,16 +39,6 @@ async function collectStreamToString(stream: unknown): Promise<string> {
   return buffer;
 }
 
-function toKotlinPairList(history: Array<[string, string]>): unknown {
-  const list: unknown[] = [];
-  (history || []).forEach((item) => {
-    const role = item && item.length > 0 ? String(item[0] ?? "") : "";
-    const content = item && item.length > 1 ? String(item[1] ?? "") : "";
-    list.push(new Pair(role, content));
-  });
-  return list;
-}
-
 function newInputProcessingState(kind: string, message?: string) {
   const base = InputProcessingStateBase;
   if (kind === "Idle") {
@@ -65,8 +55,7 @@ function newInputProcessingState(kind: string, message?: string) {
 async function sendPlanningMessage(
   aiService: unknown,
   context: unknown,
-  message: string,
-  chatHistory: Array<[string, string]>
+  chatHistory: PromptTurn[]
 ): Promise<string> {
   const emptyModelParams = Collections.emptyList();
   const onTokensUpdated = (_a: number, _b: number, _c: number) => Unit.INSTANCE;
@@ -74,15 +63,15 @@ async function sendPlanningMessage(
   const stream = await (aiService as { callSuspend: (...args: unknown[]) => Promise<unknown> }).callSuspend(
     "sendMessage",
     context,
-    message,
-    toKotlinPairList(chatHistory),
+    toKotlinPromptTurnList(chatHistory),
     emptyModelParams,
     false,
     true,
     null,
     false,
     onTokensUpdated,
-    onNonFatalError
+    onNonFatalError,
+    true
   );
   return collectStreamToString(stream);
 }
@@ -123,7 +112,7 @@ export class PlanModeManager {
 
   async executeDeepSearchMode(
     userMessage: string,
-    chatHistory: Array<[string, string]>,
+    chatHistory: PromptTurn[],
     workspacePath: string | null | undefined,
     maxTokens: number,
     tokenUsageThreshold: number,
@@ -244,14 +233,17 @@ export class PlanModeManager {
 
   private async generateExecutionPlan(
     userMessage: string,
-    chatHistory: Array<[string, string]>,
+    _chatHistory: PromptTurn[],
     _workspacePath: string | null | undefined,
     _maxTokens: number,
     _tokenUsageThreshold: number
   ): Promise<ExecutionGraph | null> {
     try {
       const planningRequest = this.buildPlanningRequest(userMessage);
-      const planningHistory: Array<[string, string]> = [["system", planningRequest]];
+      const planningHistory: PromptTurn[] = [
+        createPromptTurn("SYSTEM", planningRequest),
+        createPromptTurn("USER", getI18n().planGenerateDetailedPlan),
+      ];
 
       const aiService = await EnhancedAIService.callSuspend(
         "getAIServiceForFunction",
@@ -259,12 +251,7 @@ export class PlanModeManager {
         FunctionType.CHAT
       );
 
-      const planResponseRaw = await sendPlanningMessage(
-        aiService,
-        this.context,
-        getI18n().planGenerateDetailedPlan,
-        planningHistory
-      );
+      const planResponseRaw = await sendPlanningMessage(aiService, this.context, planningHistory);
       const planResponse = removeThinkingContent(String(planResponseRaw ?? "").trim());
       console.log(`${TAG} plan response`, planResponse);
 

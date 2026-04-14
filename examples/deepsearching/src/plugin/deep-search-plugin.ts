@@ -2,6 +2,7 @@
 import { PlanModeManager } from "../planning/plan-mode-manager";
 import { renderPlanXml } from "./plan-xml-render-plugin";
 import { resolveDeepSearchI18n } from "../i18n";
+import { normalizePromptTurnList } from "../prompt-turns";
 
 const ApiPreferences = Java.com.ai.assistance.operit.data.preferences.ApiPreferences;
 const EnhancedAIService = Java.com.ai.assistance.operit.api.chat.EnhancedAIService;
@@ -155,7 +156,7 @@ export async function onMessageProcessing(
     });
     ToolPkgMessageProcessingCancellationRegistry.register(executionId, cancellationHandle as any);
 
-    const history = (payload.chatHistory as Array<[string, string]>) || [];
+    const history = normalizePromptTurnList(payload.chatHistory);
     const workspacePath = (payload.workspacePath as string | undefined) ?? null;
     const maxTokens = Number(payload.maxTokens ?? 0);
     const tokenUsageThreshold = Number(payload.tokenUsageThreshold ?? 0);

@@ -1,11 +1,11 @@
 import type { ExecutionGraph, TaskNode } from "./plan-models";
 import { topologicalSort, validateExecutionGraph } from "./plan-parser";
 import { resolveDeepSearchI18n } from "../i18n";
+import { toKotlinPromptTurnList, type PromptTurn } from "../prompt-turns";
 const FunctionType = Java.com.ai.assistance.operit.data.model.FunctionType;
 const PromptFunctionType = Java.com.ai.assistance.operit.data.model.PromptFunctionType;
 const SystemPromptConfig = Java.com.ai.assistance.operit.core.config.SystemPromptConfig;
 const Unit = Java.kotlin.Unit;
-const Pair = Java.kotlin.Pair;
 
 const TAG = "TaskExecutor";
 
@@ -80,21 +80,11 @@ async function collectStreamToString(
   return buffer;
 }
 
-function toKotlinPairList(history: Array<[string, string]>): unknown {
-  const list: unknown[] = [];
-  (history || []).forEach((item) => {
-    const role = item && item.length > 0 ? String(item[0] ?? "") : "";
-    const content = item && item.length > 1 ? String(item[1] ?? "") : "";
-    list.push(new Pair(role, content));
-  });
-  return list;
-}
-
 async function sendMessage(
   enhancedAIService: unknown,
   options: {
     message: string;
-    chatHistory: Array<[string, string]>;
+    chatHistory: PromptTurn[];
     workspacePath?: string | null;
     maxTokens: number;
     tokenUsageThreshold: number;
@@ -117,7 +107,7 @@ async function sendMessage(
     "sendMessage",
     options.message,
     null,
-    toKotlinPairList(options.chatHistory),
+    toKotlinPromptTurnList(options.chatHistory),
     options.workspacePath ?? null,
     null,
     FunctionType.CHAT,
@@ -177,7 +167,7 @@ export class TaskExecutor {
   async executeSubtasks(
     graph: ExecutionGraph,
     originalMessage: string,
-    chatHistory: Array<[string, string]>,
+    chatHistory: PromptTurn[],
     workspacePath: string | null | undefined,
     maxTokens: number,
     tokenUsageThreshold: number
@@ -232,7 +222,7 @@ export class TaskExecutor {
   async summarize(
     graph: ExecutionGraph,
     originalMessage: string,
-    chatHistory: Array<[string, string]>,
+    chatHistory: PromptTurn[],
     workspacePath: string | null | undefined,
     maxTokens: number,
     tokenUsageThreshold: number
@@ -248,7 +238,7 @@ export class TaskExecutor {
   private async executeTask(
     task: TaskNode,
     originalMessage: string,
-    _chatHistory: Array<[string, string]>,
+    _chatHistory: PromptTurn[],
     workspacePath: string | null | undefined,
     maxTokens: number,
     tokenUsageThreshold: number
@@ -327,7 +317,7 @@ export class TaskExecutor {
   private async executeFinalSummary(
     graph: ExecutionGraph,
     originalMessage: string,
-    chatHistory: Array<[string, string]>,
+    chatHistory: PromptTurn[],
     workspacePath: string | null | undefined,
     maxTokens: number,
     tokenUsageThreshold: number

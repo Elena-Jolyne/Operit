@@ -761,7 +761,8 @@
     <string name="share_failed">Share failed</string>
     <string name="image_generated">Image generated</string>
     <string name="image_preview">Image Preview</string>
-    <string name="load_more_history">Tap to load chat history</string>
+    <string name="load_more_history">Tap to load older chat history</string>
+    <string name="load_newer_history">Tap to load newer messages</string>
 
     <!-- Theme Settings Screen -->
     <string name="theme_title_mode">Theme Mode</string>

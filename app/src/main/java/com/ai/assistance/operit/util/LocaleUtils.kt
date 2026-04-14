@@ -16,6 +16,9 @@ import kotlinx.coroutines.runBlocking
 object LocaleUtils {
 
     const val AUTO_LANGUAGE_CODE = "system"
+    const val PORTUGUESE_BRAZIL_LANGUAGE_CODE = "pt-BR"
+    private val legacyLanguageCodeAliases =
+            mapOf("pt" to PORTUGUESE_BRAZIL_LANGUAGE_CODE)
 
     /**
      * 语言信息数据类
@@ -25,14 +28,38 @@ object LocaleUtils {
      */
     data class Language(val code: String, val displayName: String, val nativeName: String)
 
+    private val supportedLanguages =
+            listOf(
+                    Language(AUTO_LANGUAGE_CODE, "Follow system", "跟随系统"),
+                    Language("zh", "Chinese", "中文"),
+                    Language("en", "English", "English"),
+                    Language(
+                            PORTUGUESE_BRAZIL_LANGUAGE_CODE,
+                            "Portuguese (Brazil)",
+                            "Português (Brasil)"
+                    )
+            )
+
+    private val supportedLanguageCodes =
+            supportedLanguages.map { it.code }.filter { it != AUTO_LANGUAGE_CODE }.toSet()
+
     /** 获取支持的语言列表 */
     fun getSupportedLanguages(): List<Language> {
-        return listOf(
-                Language(AUTO_LANGUAGE_CODE, "Follow system", "跟随系统"),
-                Language("zh", "Chinese", "中文"),
-                Language("en", "English", "English")
-                // 可以添加更多支持的语言
-                )
+        return supportedLanguages
+    }
+
+    fun getLocaleForLanguageCode(languageCode: String, context: Context? = null): Locale {
+        val resolvedCode =
+                if (languageCode.isBlank() || languageCode == AUTO_LANGUAGE_CODE) {
+                    context?.let(::getCurrentSystemLanguageCode)
+                            ?: resolveSupportedLanguageCode(Locale.getDefault().toLanguageTag())
+                } else {
+                    resolveSupportedLanguageCode(languageCode)
+                }
+
+        return Locale.forLanguageTag(resolvedCode)
+                .takeIf { it.language.isNotBlank() }
+                ?: Locale(resolvedCode)
     }
 
     /**
@@ -45,13 +72,7 @@ object LocaleUtils {
      */
     fun getLocalizedContext(context: Context): Context {
         val lang = getCurrentLanguage(context)
-        val locale = if (lang.isNotEmpty() && lang != AUTO_LANGUAGE_CODE) {
-            Locale(lang)
-        } else {
-            // 如果是“跟随系统”或为空，则回退到系统默认语言
-            val systemLanguage = getCurrentSystemLanguage(context)
-            Locale(systemLanguage)
-        }
+        val locale = getLocaleForLanguageCode(lang, context)
 
         val configuration = Configuration(context.resources.configuration)
 
@@ -81,7 +102,7 @@ object LocaleUtils {
                 val savedLanguage = manager.getCurrentLanguage()
                 // 如果不是“跟随系统”，则返回保存的语言
                 if (savedLanguage.isNotEmpty() && savedLanguage != AUTO_LANGUAGE_CODE) {
-                    return savedLanguage
+                    return resolveSupportedLanguageCode(savedLanguage)
                 }
             }
         } catch (e: Exception) {
@@ -94,20 +115,13 @@ object LocaleUtils {
 
     /** 获取系统当前语言 */
     private fun getCurrentSystemLanguage(context: Context): String {
-        val currentLocale =
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    context.resources.configuration.locales.get(0)
-                } else {
-                    context.resources.configuration.locale
-                }
-
-        return currentLocale.language
+        return getCurrentSystemLanguageCode(context)
     }
 
     /**
      * 设置应用语言
      * @param context 上下文
-     * @param languageCode 语言代码，如zh、en
+     * @param languageCode 语言代码，如zh、en、pt-BR
      */
     fun setAppLanguage(context: Context, languageCode: String) {
         
@@ -125,14 +139,7 @@ object LocaleUtils {
         }
 
         // 根据 languageCode 获取相应的 Locale
-        val localeToSet = if (languageCode == AUTO_LANGUAGE_CODE) {
-            // 跟随系统语言
-            val systemLanguage = getCurrentSystemLanguage(context)
-            Locale(systemLanguage)
-        } else {
-            // 设置为特定语言
-            Locale(languageCode)
-        }
+        val localeToSet = getLocaleForLanguageCode(languageCode, context)
         
         // 设置默认语言
         Locale.setDefault(localeToSet)
@@ -179,5 +186,66 @@ object LocaleUtils {
                 // 错误时静默处理
             }
         }
+    }
+
+    private fun getCurrentSystemLocale(context: Context): Locale {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            context.resources.configuration.locales.get(0)
+        } else {
+            @Suppress("DEPRECATION")
+            context.resources.configuration.locale
+        }
+    }
+
+    private fun getCurrentSystemLanguageCode(context: Context): String {
+        return resolveSupportedLanguageCode(getCurrentSystemLocale(context).toLanguageTag())
+    }
+
+    private fun normalizeStoredLanguageCode(languageCode: String): String {
+        if (languageCode.isBlank() || languageCode == AUTO_LANGUAGE_CODE) {
+            return languageCode
+        }
+
+        val normalizedCode = languageCode.replace("_", "-").replace("-r", "-")
+        val canonicalCode =
+                Locale.forLanguageTag(normalizedCode)
+                        .takeIf { it.language.isNotBlank() }
+                        ?.toLanguageTag()
+                        ?.takeIf { it.isNotBlank() && it != "und" }
+                        ?: normalizedCode
+        return legacyLanguageCodeAliases[canonicalCode] ?: canonicalCode
+    }
+
+    private fun resolveSupportedLanguageCode(languageCode: String): String {
+        val normalizedCode = normalizeStoredLanguageCode(languageCode)
+        if (normalizedCode.isBlank() || normalizedCode == AUTO_LANGUAGE_CODE) {
+            return normalizedCode
+        }
+
+        if (normalizedCode in supportedLanguageCodes) {
+            return normalizedCode
+        }
+
+        val locale =
+                Locale.forLanguageTag(normalizedCode)
+                        .takeIf { it.language.isNotBlank() }
+                        ?: return normalizedCode
+        val language = locale.language.lowercase(Locale.ROOT)
+
+        val languageOnlyMatch =
+                supportedLanguageCodes.firstOrNull { it.equals(language, ignoreCase = true) }
+        if (languageOnlyMatch != null) {
+            return languageOnlyMatch
+        }
+
+        val sameLanguageVariants =
+                supportedLanguageCodes.filter {
+                    Locale.forLanguageTag(it).language.equals(language, ignoreCase = true)
+                }
+        if (sameLanguageVariants.size == 1) {
+            return sameLanguageVariants.first()
+        }
+
+        return normalizedCode
     }
 }

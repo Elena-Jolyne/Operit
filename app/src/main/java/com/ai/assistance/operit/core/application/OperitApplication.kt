@@ -505,7 +505,7 @@ class OperitApplication : Application(), ImageLoaderFactory, WorkConfiguration.P
             AppLogger.d(TAG, "获取语言设置: $languageCode")
 
             // 立即应用语言设置
-            val locale = Locale(languageCode)
+            val locale = LocaleUtils.getLocaleForLanguageCode(languageCode, this)
             // 设置默认语言
             Locale.setDefault(locale)
 
@@ -538,7 +538,7 @@ class OperitApplication : Application(), ImageLoaderFactory, WorkConfiguration.P
         // 在基础上下文附加前应用语言设置
         try {
             val code = LocaleUtils.getCurrentLanguage(base)
-            val locale = Locale(code)
+            val locale = LocaleUtils.getLocaleForLanguageCode(code, base)
             val config = Configuration(base.resources.configuration)
 
             // 设置语言配置

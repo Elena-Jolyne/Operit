@@ -8,6 +8,7 @@ exports.onInputMenuToggle = onInputMenuToggle;
 const plan_mode_manager_1 = require("../planning/plan-mode-manager");
 const plan_xml_render_plugin_1 = require("./plan-xml-render-plugin");
 const i18n_1 = require("../i18n");
+const prompt_turns_1 = require("../prompt-turns");
 const ApiPreferences = Java.com.ai.assistance.operit.data.preferences.ApiPreferences;
 const EnhancedAIService = Java.com.ai.assistance.operit.api.chat.EnhancedAIService;
 const MessageProcessingController = Java.com.ai.assistance.operit.core.chat.plugins.MessageProcessingController;
@@ -134,7 +135,7 @@ async function onMessageProcessing(input) {
             },
         });
         ToolPkgMessageProcessingCancellationRegistry.register(executionId, cancellationHandle);
-        const history = payload.chatHistory || [];
+        const history = (0, prompt_turns_1.normalizePromptTurnList)(payload.chatHistory);
         const workspacePath = payload.workspacePath ?? null;
         const maxTokens = Number(payload.maxTokens ?? 0);
         const tokenUsageThreshold = Number(payload.tokenUsageThreshold ?? 0);

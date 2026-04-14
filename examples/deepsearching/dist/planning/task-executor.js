@@ -3,11 +3,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.TaskExecutor = void 0;
 const plan_parser_1 = require("./plan-parser");
 const i18n_1 = require("../i18n");
+const prompt_turns_1 = require("../prompt-turns");
 const FunctionType = Java.com.ai.assistance.operit.data.model.FunctionType;
 const PromptFunctionType = Java.com.ai.assistance.operit.data.model.PromptFunctionType;
 const SystemPromptConfig = Java.com.ai.assistance.operit.core.config.SystemPromptConfig;
 const Unit = Java.kotlin.Unit;
-const Pair = Java.kotlin.Pair;
 const TAG = "TaskExecutor";
 const TOOL_TAG = /<tool\b[\s\S]*?<\/tool>/gi;
 const TOOL_SELF_CLOSING = /<tool\b[^>]*\/>/gi;
@@ -70,15 +70,6 @@ async function collectStreamToString(stream, onChunk) {
     await stream.callSuspend("collect", collector);
     return buffer;
 }
-function toKotlinPairList(history) {
-    const list = [];
-    (history || []).forEach((item) => {
-        const role = item && item.length > 0 ? String(item[0] ?? "") : "";
-        const content = item && item.length > 1 ? String(item[1] ?? "") : "";
-        list.push(new Pair(role, content));
-    });
-    return list;
-}
 async function sendMessage(enhancedAIService, options) {
     const onNonFatalError = (_value) => Unit.INSTANCE;
     const onToolInvocation = options.onToolInvocation
@@ -87,7 +78,7 @@ async function sendMessage(enhancedAIService, options) {
             return Unit.INSTANCE;
         }
         : null;
-    const stream = await enhancedAIService.callSuspend("sendMessage", options.message, null, toKotlinPairList(options.chatHistory), options.workspacePath ?? null, null, FunctionType.CHAT, PromptFunctionType.CHAT, false, false, false, options.maxTokens, options.tokenUsageThreshold, onNonFatalError, null, options.customSystemPromptTemplate ?? null, options.isSubTask, null, null, null, false, null, options.proxySenderName ?? null, onToolInvocation, null, null, true);
+    const stream = await enhancedAIService.callSuspend("sendMessage", options.message, null, (0, prompt_turns_1.toKotlinPromptTurnList)(options.chatHistory), options.workspacePath ?? null, null, FunctionType.CHAT, PromptFunctionType.CHAT, false, false, false, options.maxTokens, options.tokenUsageThreshold, onNonFatalError, null, options.customSystemPromptTemplate ?? null, options.isSubTask, null, null, null, false, null, options.proxySenderName ?? null, onToolInvocation, null, null, true);
     return collectStreamToString(stream, options.onChunk);
 }
 class TaskExecutor {

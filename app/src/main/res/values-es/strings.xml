@@ -1311,7 +1311,8 @@
     <string name="generating_image">Generando imagen...</string>
     <string name="share_failed">Error al compartir</string>
     <string name="image_generated">Imagen generada</string>
-    <string name="load_more_history">Cargar más mensajes del historial...</string>
+    <string name="load_more_history">Toca para cargar mensajes anteriores</string>
+    <string name="load_newer_history">Toca para cargar mensajes más recientes</string>
     
     <!-- Layout Adjustment Settings -->
     <string name="layout_adjustment_settings_title">Configuración de Ajuste de Diseño</string>

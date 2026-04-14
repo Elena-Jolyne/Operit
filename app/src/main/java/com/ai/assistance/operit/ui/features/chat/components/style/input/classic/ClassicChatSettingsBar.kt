@@ -296,7 +296,7 @@ fun ClassicChatSettingsBar(
             ) {
                 Box(modifier = Modifier.padding(top = 0.dp, bottom = 76.dp)) {
                     Card(
-                        modifier = Modifier.width(280.dp), // 加宽一级菜单以适应英文显示
+                        modifier = Modifier.width(280.dp),
                         shape = RoundedCornerShape(8.dp),
                             colors =
                                     CardDefaults.cardColors(
@@ -725,7 +725,7 @@ private fun SettingItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(36.dp)
+            .heightIn(min = 36.dp)
             .padding(horizontal = 12.dp)
             .semantics {
                 contentDescription = title
@@ -761,6 +761,8 @@ private fun SettingItem(
             text = title,
             fontSize = 13.sp,
             fontWeight = FontWeight.Normal,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
             color =
                 if (isEnabled) MaterialTheme.colorScheme.onSurface
                 else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
@@ -939,7 +941,7 @@ private fun DisableSettingsGroupItem(
         Row(
                 modifier =
                         Modifier.fillMaxWidth()
-                                .height(36.dp)
+                                .heightIn(min = 36.dp)
                                 .semantics { contentDescription = accessibilityDesc }
                                 .clickable { onExpandedChange(!expanded) }
                                 .padding(horizontal = 12.dp),
@@ -1114,7 +1116,7 @@ private fun ThinkingSettingsItem(
                         onValueChange = { onToggle() },
                         role = Role.Switch
                     )
-                    .height(36.dp)
+                    .heightIn(min = 36.dp)
                     .padding(horizontal = 8.dp)
         ) {
             Row(
@@ -1139,6 +1141,8 @@ private fun ThinkingSettingsItem(
                     text = title,
                     fontSize = 13.sp,
                     fontWeight = if (isChecked) FontWeight.Bold else FontWeight.Normal,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                     color = if (isChecked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f).padding(horizontal = 8.dp).clearAndSetSemantics {}
                 )
@@ -1190,7 +1194,7 @@ private fun ThinkingSettingsItem(
         Row(
             modifier =
                     Modifier.fillMaxWidth()
-                            .height(36.dp)
+                            .heightIn(min = 36.dp)
                             .semantics { contentDescription = accessibilityDesc }
                             .clickable { onExpandedChange(!expanded) }
                             .padding(horizontal = 12.dp),
@@ -1226,10 +1230,10 @@ private fun ThinkingSettingsItem(
                     text = thinkingTypeText,
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.primary,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clearAndSetSemantics {}
+                    modifier = Modifier.weight(1f, fill = false).clearAndSetSemantics {}
                 )
             }
             Icon(
@@ -1316,7 +1320,7 @@ private fun MemorySelectorItem(
         Row(
                 modifier =
                         Modifier.fillMaxWidth()
-                .height(36.dp)
+                .heightIn(min = 36.dp)
                 .semantics {
                     contentDescription = accessibilityDesc
                 }
@@ -1357,10 +1361,10 @@ private fun MemorySelectorItem(
                     text = currentProfile?.name ?: stringResource(R.string.not_selected),
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.primary,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clearAndSetSemantics {}
+                    modifier = Modifier.weight(1f, fill = false).clearAndSetSemantics {}
                 )
             }
             Icon(
@@ -1465,7 +1469,7 @@ private fun ModelSelectorItem(
         Row(
                 modifier =
                         Modifier.fillMaxWidth()
-                .height(36.dp)
+                .heightIn(min = 36.dp)
                 .semantics {
                     contentDescription = accessibilityDesc
                 }
@@ -1512,7 +1516,7 @@ private fun ModelSelectorItem(
                         text = selectedModel.ifEmpty { stringResource(R.string.not_selected) },
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.primary,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier
@@ -1523,10 +1527,10 @@ private fun ModelSelectorItem(
                     text = stringResource(R.string.not_selected),
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.primary,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clearAndSetSemantics {}
+                    modifier = Modifier.weight(1f, fill = false).clearAndSetSemantics {}
                 )
             }
             Icon(
@@ -1704,7 +1708,7 @@ private fun ActionSettingItem(
     Row(
         modifier =
                 Modifier.fillMaxWidth()
-                        .height(36.dp)
+                        .heightIn(min = 36.dp)
                         .padding(vertical = 2.dp)
                         .padding(horizontal = 3.dp)
                         .border(
@@ -1746,6 +1750,8 @@ private fun ActionSettingItem(
             text = title,
             fontSize = 13.sp,
             fontWeight = FontWeight.Normal,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier
                 .weight(1f)

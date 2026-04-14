@@ -38,9 +38,11 @@ ToolPkg.registerMessageProcessingPlugin(...)
 - `registerToolPkgToolLifecycleHook(...)`
 - `registerToolPkgPromptInputHook(...)`
 - `registerToolPkgPromptHistoryHook(...)`
+- `registerToolPkgPromptEstimateHistoryHook(...)`
 - `registerToolPkgSystemPromptComposeHook(...)`
 - `registerToolPkgToolPromptComposeHook(...)`
 - `registerToolPkgPromptFinalizeHook(...)`
+- `registerToolPkgPromptEstimateFinalizeHook(...)`
 
 ## 基础类型
 
@@ -84,6 +86,33 @@ type LocalizedText = string | { [lang: string]: string }
 - `input_menu_toggle`
 - 工具生命周期事件
 - Prompt 输入 / 历史 / 系统提示词 / 工具提示词 / 最终发送事件
+
+### Prompt 轮次类型：`PromptTurnKind` / `PromptTurn`
+
+Prompt 相关 hook 和 `message_processing` 插件里的历史消息，统一使用结构化的 `PromptTurn`：
+
+```ts
+type PromptTurnKind =
+  | 'SYSTEM'
+  | 'USER'
+  | 'ASSISTANT'
+  | 'TOOL_CALL'
+  | 'TOOL_RESULT'
+  | 'SUMMARY'
+
+interface PromptTurn {
+  kind: PromptTurnKind
+  content: string
+  toolName?: string
+  metadata?: JsonObject
+}
+```
+
+注意：
+
+- 这里不再使用旧的 `{ role, content }` 结构。
+- `message_processing` 插件收到的 `chatHistory` 也是 `PromptTurn[]`。
+- 如果你要复用旧的 role 语义，需要自己把 `kind` 映射成对应角色。
 
 ### 工具生命周期事件：`ToolLifecycleEventName`
 
@@ -148,7 +177,7 @@ type LocalizedText = string | { [lang: string]: string }
 字段包括：
 
 - `messageContent?`
-- `chatHistory?`
+- `chatHistory?: PromptTurn[]`
 - `workspacePath?`
 - `maxTokens?`
 - `tokenUsageThreshold?`
@@ -193,8 +222,8 @@ type LocalizedText = string | { [lang: string]: string }
 - `useEnglish?`
 - `rawInput?`
 - `processedInput?`
-- `chatHistory?`
-- `preparedHistory?`
+- `chatHistory?: PromptTurn[]`
+- `preparedHistory?: PromptTurn[]`
 - `systemPrompt?`
 - `toolPrompt?`
 - `modelParameters?`
@@ -271,6 +300,11 @@ type LocalizedText = string | { [lang: string]: string }
 - `PromptFinalizeHookReturn`
 
 这几类返回允许在字符串、消息数组、结构化对象与空返回之间切换，具体以类型定义为准。
+其中：
+
+- `PromptHistoryHookReturn` 里的数组元素类型是 `PromptTurn`
+- `PromptFinalizeHookReturn` 里的数组元素类型也是 `PromptTurn`
+- 估算阶段的 `PromptEstimateHistoryHook` / `PromptEstimateFinalizeHook` 复用相同的 payload 和返回结构
 
 ## 注册定义对象
 
@@ -321,9 +355,11 @@ type LocalizedText = string | { [lang: string]: string }
 - `ToolLifecycleHookRegistration`
 - `PromptInputHookRegistration`
 - `PromptHistoryHookRegistration`
+- `PromptEstimateHistoryHookRegistration`
 - `SystemPromptComposeHookRegistration`
 - `ToolPromptComposeHookRegistration`
 - `PromptFinalizeHookRegistration`
+- `PromptEstimateFinalizeHookRegistration`
 
 ## `ToolPkg.Registry`
 
@@ -337,9 +373,11 @@ type LocalizedText = string | { [lang: string]: string }
 - `registerToolLifecycleHook(definition)`
 - `registerPromptInputHook(definition)`
 - `registerPromptHistoryHook(definition)`
+- `registerPromptEstimateHistoryHook(definition)`
 - `registerSystemPromptComposeHook(definition)`
 - `registerToolPromptComposeHook(definition)`
 - `registerPromptFinalizeHook(definition)`
+- `registerPromptEstimateFinalizeHook(definition)`
 - `readResource(key, outputFileName?)`
 
 ### `ToolPkg.readResource(...)`

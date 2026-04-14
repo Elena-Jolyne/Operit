@@ -1580,7 +1580,8 @@
     <string name="share_failed">分享失败</string>
     <string name="image_generated">图片已生成</string>
     <string name="image_preview">图片预览</string>
-    <string name="load_more_history">点击加载历史记录</string>
+    <string name="load_more_history">点击加载更早的历史记录</string>
+    <string name="load_newer_history">点击加载较新的消息</string>
 
     <!-- Permission Guide Screen -->
     <string name="permission_guide_intro_1_title">语音驱动的UI自动化</string>

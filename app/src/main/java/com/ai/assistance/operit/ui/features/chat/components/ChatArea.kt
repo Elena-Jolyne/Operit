@@ -115,96 +115,152 @@ private fun cleanXmlTags(content: String): String {
         .trim()
 }
 
+private const val MAX_VISIBLE_CHAT_PAGES = 3
+
+private data class PaginationState(
+    val pageStartIndices: List<Int>,
+)
+
 private data class PaginationWindow(
+    val newestVisibleDepth: Int,
+    val oldestVisibleDepth: Int,
     val minVisibleIndex: Int,
-    val hasMoreMessages: Boolean
+    val maxVisibleIndexExclusive: Int,
+    val hasOlderPages: Boolean,
+    val hasNewerPages: Boolean,
 )
 
 private fun isPaginationTriggerMessage(message: ChatMessage): Boolean {
     return message.sender == "user" || message.sender == "ai" || message.sender == "summary"
 }
 
-private fun calculatePaginationWindow(
+private fun buildPaginationState(
     chatHistory: List<ChatMessage>,
     messagesPerPage: Int,
-    depth: Int
-): PaginationWindow {
+): PaginationState {
     if (chatHistory.isEmpty()) {
-        return PaginationWindow(minVisibleIndex = 0, hasMoreMessages = false)
+        return PaginationState(pageStartIndices = emptyList())
     }
 
     val safeMessagesPerPage = messagesPerPage.coerceAtLeast(1)
-    val safeDepth = depth.coerceAtLeast(1)
-
+    val pageStartIndices = mutableListOf<Int>()
     var cursor = chatHistory.lastIndex
-    var minVisibleIndex = 0
 
-    repeat(safeDepth) {
-        if (cursor < 0) {
-            minVisibleIndex = 0
-            return@repeat
-        }
+    while (cursor >= 0) {
+        var pageStartIndex = 0
+        var triggerCountInCurrentPage = 0
+        var pageClosed = false
 
-        var triggerCountInCurrentStep = 0
-        var stepStopped = false
-
-        while (cursor >= 0) {
+        while (cursor >= 0 && !pageClosed) {
             val message = chatHistory[cursor]
             if (isPaginationTriggerMessage(message)) {
-                triggerCountInCurrentStep += 1
+                triggerCountInCurrentPage += 1
 
                 if (message.sender == "summary") {
-                    minVisibleIndex = cursor
+                    pageStartIndex = cursor
                     cursor -= 1
-                    stepStopped = true
-                    break
+                    pageClosed = true
                 }
 
-                if (triggerCountInCurrentStep >= safeMessagesPerPage) {
-                    minVisibleIndex = cursor
+                if (!pageClosed && triggerCountInCurrentPage >= safeMessagesPerPage) {
+                    pageStartIndex = cursor
                     cursor -= 1
-                    stepStopped = true
-                    break
+                    pageClosed = true
                 }
             }
 
-            cursor -= 1
+            if (!pageClosed) {
+                cursor -= 1
+            }
         }
 
-        if (!stepStopped) {
-            minVisibleIndex = 0
+        if (!pageClosed) {
+            pageStartIndex = 0
             cursor = -1
-            return@repeat
         }
+
+        pageStartIndices += pageStartIndex
     }
 
+    return PaginationState(pageStartIndices = pageStartIndices)
+}
+
+private fun resolvePaginationWindow(
+    paginationState: PaginationState,
+    messagesCount: Int,
+    newestVisibleDepth: Int,
+    oldestVisibleDepth: Int,
+): PaginationWindow {
+    if (messagesCount <= 0 || paginationState.pageStartIndices.isEmpty()) {
+        return PaginationWindow(
+            newestVisibleDepth = 1,
+            oldestVisibleDepth = 1,
+            minVisibleIndex = 0,
+            maxVisibleIndexExclusive = messagesCount,
+            hasOlderPages = false,
+            hasNewerPages = false,
+        )
+    }
+
+    val pageCount = paginationState.pageStartIndices.size
+    val safeNewestVisibleDepth = newestVisibleDepth.coerceIn(1, pageCount)
+    val safeOldestVisibleDepth =
+        oldestVisibleDepth
+            .coerceIn(safeNewestVisibleDepth, pageCount)
+            .coerceAtMost(safeNewestVisibleDepth + MAX_VISIBLE_CHAT_PAGES - 1)
+    val minVisibleIndex = paginationState.pageStartIndices[safeOldestVisibleDepth - 1]
+    val maxVisibleIndexExclusive =
+        if (safeNewestVisibleDepth == 1) {
+            messagesCount
+        } else {
+            paginationState.pageStartIndices[safeNewestVisibleDepth - 2]
+        }
+
     return PaginationWindow(
+        newestVisibleDepth = safeNewestVisibleDepth,
+        oldestVisibleDepth = safeOldestVisibleDepth,
         minVisibleIndex = minVisibleIndex,
-        hasMoreMessages = cursor >= 0
+        maxVisibleIndexExclusive = maxVisibleIndexExclusive,
+        hasOlderPages = safeOldestVisibleDepth < pageCount,
+        hasNewerPages = safeNewestVisibleDepth > 1,
     )
 }
 
-private fun findDepthForMessage(
-    chatHistory: List<ChatMessage>,
-    messagesPerPage: Int,
+private fun findPageDepthForMessage(
+    paginationState: PaginationState,
     targetIndex: Int,
 ): Int {
-    if (chatHistory.isEmpty()) {
+    if (paginationState.pageStartIndices.isEmpty()) {
         return 1
     }
 
-    val safeTargetIndex = targetIndex.coerceIn(chatHistory.indices)
-    var depth = 1
-
-    while (depth < chatHistory.size) {
-        val paginationWindow = calculatePaginationWindow(chatHistory, messagesPerPage, depth)
-        if (safeTargetIndex >= paginationWindow.minVisibleIndex) {
-            return depth
+    val safeTargetIndex = targetIndex.coerceAtLeast(0)
+    paginationState.pageStartIndices.forEachIndexed { index, pageStartIndex ->
+        if (safeTargetIndex >= pageStartIndex) {
+            return index + 1
         }
-        depth += 1
     }
 
-    return depth
+    return paginationState.pageStartIndices.size
+}
+
+private fun resolveWindowDepthsForTargetPage(
+    paginationState: PaginationState,
+    targetPageDepth: Int,
+): Pair<Int, Int> {
+    if (paginationState.pageStartIndices.isEmpty()) {
+        return 1 to 1
+    }
+
+    val pageCount = paginationState.pageStartIndices.size
+    val safeTargetPageDepth = targetPageDepth.coerceIn(1, pageCount)
+    val newestVisibleDepth = (safeTargetPageDepth - MAX_VISIBLE_CHAT_PAGES + 1).coerceAtLeast(1)
+    val oldestVisibleDepth =
+        (newestVisibleDepth + MAX_VISIBLE_CHAT_PAGES - 1)
+            .coerceAtMost(pageCount)
+            .coerceAtLeast(safeTargetPageDepth)
+
+    return newestVisibleDepth to oldestVisibleDepth
 }
 
 enum class ChatStyle {
@@ -215,6 +271,7 @@ enum class ChatStyle {
 @Composable
 fun ChatArea(
     chatHistory: List<ChatMessage>,
+    currentChatId: String,
     scrollState: ScrollState,
     aiReferences: List<AiReference> = emptyList(),
     isLoading: Boolean,
@@ -240,6 +297,8 @@ fun ChatArea(
     onCreateBranch: ((Long) -> Unit)? = null, // 添加创建分支回调参数
     onInsertSummary: ((Int, ChatMessage) -> Unit)? = null, // 添加插入总结回调参数
     onMentionRoleFromAvatar: ((String) -> Unit)? = null, // 长按角色头像提及
+    autoScrollToBottom: Boolean = true,
+    onHasHiddenNewerMessagesChange: ((Boolean) -> Unit)? = null,
     onAutoScrollToBottomChange: ((Boolean) -> Unit)? = null,
     messagesPerPage: Int = 10, // 每页显示的消息数量
     topPadding: Dp = 0.dp,
@@ -262,11 +321,11 @@ fun ChatArea(
     bubbleAiContentPaddingRight: Float = 12f,
     showChatFloatingDotsAnimation: Boolean = true,
 ) {
-    // 记住当前深度状态，但当chatHistory发生变化时重置为1
-    var currentDepth = remember(chatHistory) { mutableStateOf(1) }
+    var newestVisibleDepthState by remember(currentChatId) { mutableStateOf(1) }
+    var oldestVisibleDepthState by remember(currentChatId) { mutableStateOf(1) }
     var viewportHeightPx by remember { mutableStateOf(0) }
-    val messageAnchors = remember(chatHistory) { mutableStateMapOf<Int, ChatScrollMessageAnchor>() }
-    var pendingJumpToMessageIndex by remember(chatHistory) { mutableStateOf<Int?>(null) }
+    val messageAnchors = remember(currentChatId) { mutableStateMapOf<Int, ChatScrollMessageAnchor>() }
+    var pendingJumpToMessageIndex by remember(currentChatId) { mutableStateOf<Int?>(null) }
     val lastMessage = chatHistory.lastOrNull()
     var hasLastAiMessageStartedStreaming by remember(lastMessage?.timestamp) {
         mutableStateOf(
@@ -275,16 +334,45 @@ fun ChatArea(
     }
 
     val messagesCount = chatHistory.size
-    val paginationWindow =
-        calculatePaginationWindow(
+    val paginationState = remember(chatHistory, messagesPerPage) {
+        buildPaginationState(
             chatHistory = chatHistory,
             messagesPerPage = messagesPerPage,
-            depth = currentDepth.value,
+        )
+    }
+    val paginationWindow =
+        resolvePaginationWindow(
+            paginationState = paginationState,
+            messagesCount = messagesCount,
+            newestVisibleDepth = newestVisibleDepthState,
+            oldestVisibleDepth = oldestVisibleDepthState,
         )
     val minVisibleIndex = paginationWindow.minVisibleIndex
-    val hasMoreMessages = paginationWindow.hasMoreMessages
-    val visibleRange = minVisibleIndex until messagesCount
+    val maxVisibleIndexExclusive = paginationWindow.maxVisibleIndexExclusive
+    val hasOlderPages = paginationWindow.hasOlderPages
+    val hasNewerPages = paginationWindow.hasNewerPages
+    val visiblePageCount = paginationWindow.oldestVisibleDepth - paginationWindow.newestVisibleDepth + 1
+    val visibleRange = minVisibleIndex until maxVisibleIndexExclusive
     val pendingTargetAnchor = pendingJumpToMessageIndex?.let { messageAnchors[it] }
+    LaunchedEffect(currentChatId, chatHistory.isEmpty()) {
+        if (chatHistory.isEmpty()) {
+            newestVisibleDepthState = 1
+            oldestVisibleDepthState = 1
+            pendingJumpToMessageIndex = null
+        }
+    }
+
+    LaunchedEffect(autoScrollToBottom, messagesCount) {
+        if (autoScrollToBottom && messagesCount > 0) {
+            newestVisibleDepthState = 1
+            oldestVisibleDepthState = 1
+            pendingJumpToMessageIndex = messagesCount - 1
+        }
+    }
+
+    LaunchedEffect(hasNewerPages) {
+        onHasHiddenNewerMessagesChange?.invoke(hasNewerPages)
+    }
 
     LaunchedEffect(lastMessage?.timestamp, lastMessage?.contentStream) {
         val lastAiMessageHasStaticContent =
@@ -316,8 +404,7 @@ fun ChatArea(
     LaunchedEffect(
         pendingJumpToMessageIndex,
         minVisibleIndex,
-        messagesCount,
-        currentDepth.value,
+        maxVisibleIndexExclusive,
         pendingTargetAnchor,
         scrollState.maxValue,
     ) {
@@ -328,9 +415,18 @@ fun ChatArea(
         }
 
         if (targetIndex !in visibleRange) {
-            val requiredDepth = findDepthForMessage(chatHistory, messagesPerPage, targetIndex)
-            if (requiredDepth != currentDepth.value) {
-                currentDepth.value = requiredDepth
+            val targetPageDepth = findPageDepthForMessage(paginationState, targetIndex)
+            val (newestDepth, oldestDepth) =
+                resolveWindowDepthsForTargetPage(
+                    paginationState = paginationState,
+                    targetPageDepth = targetPageDepth,
+                )
+            if (
+                newestDepth != paginationWindow.newestVisibleDepth ||
+                    oldestDepth != paginationWindow.oldestVisibleDepth
+            ) {
+                newestVisibleDepthState = newestDepth
+                oldestVisibleDepthState = oldestDepth
             }
             return@LaunchedEffect
         }
@@ -345,8 +441,10 @@ fun ChatArea(
         pendingJumpToMessageIndex = null
     }
 
+    val isLatestMessageVisible = messagesCount > 0 && (messagesCount - 1) in visibleRange
     val showLoadingIndicator =
-        isLoading &&
+        isLatestMessageVisible &&
+            isLoading &&
             (
                 lastMessage?.sender == "user" ||
                     lastMessage?.let {
@@ -356,7 +454,10 @@ fun ChatArea(
                     } == true
             )
     val shouldHideLastAiMessage =
-        showLoadingIndicator && chatStyle == ChatStyle.BUBBLE && lastMessage?.sender == "ai"
+        isLatestMessageVisible &&
+            showLoadingIndicator &&
+            chatStyle == ChatStyle.BUBBLE &&
+            lastMessage?.sender == "ai"
 
     Box(
         modifier =
@@ -375,13 +476,21 @@ fun ChatArea(
                     .background(Color.Transparent)
                     .padding(top = topPadding, bottom = bottomPadding),
         ) {
-            if (hasMoreMessages) {
+            if (hasOlderPages) {
                 Text(
                     text = stringResource(id = R.string.load_more_history),
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .clickable { currentDepth.value += 1 }
+                            .clickable {
+                                onAutoScrollToBottomChange?.invoke(false)
+                                if (visiblePageCount < MAX_VISIBLE_CHAT_PAGES) {
+                                    oldestVisibleDepthState = paginationWindow.oldestVisibleDepth + 1
+                                } else {
+                                    newestVisibleDepthState = paginationWindow.newestVisibleDepth + 1
+                                    oldestVisibleDepthState = paginationWindow.oldestVisibleDepth + 1
+                                }
+                            }
                             .padding(vertical = 16.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.Gray,
@@ -390,7 +499,7 @@ fun ChatArea(
                 Spacer(modifier = Modifier.height(4.dp))
             }
 
-            chatHistory.subList(minVisibleIndex, messagesCount).forEachIndexed { relativeIndex, message ->
+            chatHistory.subList(minVisibleIndex, maxVisibleIndexExclusive).forEachIndexed { relativeIndex, message ->
                 val actualIndex = minVisibleIndex + relativeIndex
                 val isLastAiMessage = actualIndex == messagesCount - 1 && message.sender == "ai"
                 val shouldHide = shouldHideLastAiMessage && isLastAiMessage
@@ -450,6 +559,30 @@ fun ChatArea(
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            if (hasNewerPages) {
+                Text(
+                    text = stringResource(id = R.string.load_newer_history),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                val nextNewestVisibleDepth =
+                                    (paginationWindow.newestVisibleDepth - 1).coerceAtLeast(1)
+                                val nextOldestVisibleDepth =
+                                    (paginationWindow.oldestVisibleDepth - 1)
+                                        .coerceAtLeast(nextNewestVisibleDepth)
+                                newestVisibleDepthState = nextNewestVisibleDepth
+                                oldestVisibleDepthState = nextOldestVisibleDepth
+                                onAutoScrollToBottomChange?.invoke(nextNewestVisibleDepth == 1)
+                            }
+                            .padding(vertical = 16.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.Gray,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
             }
 
             if (showLoadingIndicator) {

@@ -132,9 +132,19 @@ export namespace ToolPkg {
         | "before_finalize_prompt"
         | "before_send_to_model";
 
-    export interface PromptMessage extends JsonObject {
-        role: string;
+    export type PromptTurnKind =
+        | "SYSTEM"
+        | "USER"
+        | "ASSISTANT"
+        | "TOOL_CALL"
+        | "TOOL_RESULT"
+        | "SUMMARY";
+
+    export interface PromptTurn extends JsonObject {
+        kind: PromptTurnKind;
         content: string;
+        toolName?: string;
+        metadata?: JsonObject;
     }
 
     export interface ToolLifecycleEventPayload extends JsonObject {
@@ -152,8 +162,8 @@ export namespace ToolPkg {
     export interface PromptHookObjectResult extends JsonObject {
         rawInput?: string;
         processedInput?: string;
-        chatHistory?: PromptMessage[];
-        preparedHistory?: PromptMessage[];
+        chatHistory?: PromptTurn[];
+        preparedHistory?: PromptTurn[];
         systemPrompt?: string;
         toolPrompt?: string;
         metadata?: JsonObject;
@@ -167,8 +177,8 @@ export namespace ToolPkg {
         useEnglish?: boolean;
         rawInput?: string;
         processedInput?: string;
-        chatHistory?: PromptMessage[];
-        preparedHistory?: PromptMessage[];
+        chatHistory?: PromptTurn[];
+        preparedHistory?: PromptTurn[];
         systemPrompt?: string;
         toolPrompt?: string;
         modelParameters?: JsonObject[];
@@ -186,11 +196,11 @@ export namespace ToolPkg {
         | Promise<string | PromptHookObjectResult | null | void>;
 
     export type PromptHistoryHookReturn =
-        | PromptMessage[]
+        | PromptTurn[]
         | PromptHookObjectResult
         | null
         | void
-        | Promise<PromptMessage[] | PromptHookObjectResult | null | void>;
+        | Promise<PromptTurn[] | PromptHookObjectResult | null | void>;
 
     export type SystemPromptComposeHookReturn =
         | string
@@ -208,11 +218,11 @@ export namespace ToolPkg {
 
     export type PromptFinalizeHookReturn =
         | string
-        | PromptMessage[]
+        | PromptTurn[]
         | PromptHookObjectResult
         | null
         | void
-        | Promise<string | PromptMessage[] | PromptHookObjectResult | null | void>;
+        | Promise<string | PromptTurn[] | PromptHookObjectResult | null | void>;
 
     export type AppLifecycleHookHandler =
         (event: AppLifecycleHookEvent) => AppLifecycleHookReturn;
@@ -273,7 +283,7 @@ export namespace ToolPkg {
 
     export interface MessageProcessingEventPayload extends JsonObject {
         messageContent?: string;
-        chatHistory?: Array<[string, string]>;
+        chatHistory?: PromptTurn[];
         workspacePath?: string;
         maxTokens?: number;
         tokenUsageThreshold?: number;

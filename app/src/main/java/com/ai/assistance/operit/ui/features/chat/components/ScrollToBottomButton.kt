@@ -42,6 +42,7 @@ fun ScrollToBottomButton(
     scrollState: ScrollState,
     coroutineScope: CoroutineScope,
     autoScrollToBottom: Boolean,
+    hasHiddenNewerMessages: Boolean = false,
     onAutoScrollToBottomChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -61,7 +62,9 @@ fun ScrollToBottomButton(
                             showScrollButton = true
                         }
                     } else {
-                        val isAtBottom = scrollState.value >= scrollState.maxValue
+                        val isAtBottom =
+                            scrollState.value >= scrollState.maxValue &&
+                                !hasHiddenNewerMessages
                         if (isAtBottom && !autoScrollToBottom) {
                             onAutoScrollToBottomChange(true)
                             showScrollButton = false

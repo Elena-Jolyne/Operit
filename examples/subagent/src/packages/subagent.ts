@@ -61,13 +61,16 @@
 }
 */
 import "../../../types/quickjs-runtime.js";
+import type { JavaBridgeValue } from "../../../types/java-bridge";
 
 const EnhancedAIService = Java.com.ai.assistance.operit.api.chat.EnhancedAIService;
 const FunctionType = Java.com.ai.assistance.operit.data.model.FunctionType;
 const PromptFunctionType = Java.com.ai.assistance.operit.data.model.PromptFunctionType;
 const SystemPromptConfig = Java.com.ai.assistance.operit.core.config.SystemPromptConfig;
 const Unit = Java.kotlin.Unit;
-const Pair = Java.kotlin.Pair;
+const ArrayList = Java.type("java.util.ArrayList");
+const LinkedHashMap = Java.type("java.util.LinkedHashMap");
+const PromptTurnKindClass = Java.type("com.ai.assistance.operit.core.chat.hooks.PromptTurnKind");
 
 const TOOL_TAG = /<tool\b[\s\S]*?<\/tool>/gi;
 const TOOL_SELF_CLOSING = /<tool\b[^>]*\/>/gi;
@@ -80,7 +83,7 @@ const SEARCH_TAG = /<search>[\s\S]*?(<\/search>|\z)/gi;
 
 interface SendMessageOptions {
   message: string;
-  chatHistory: Array<[string, string]>;
+  chatHistory: ToolPkg.PromptTurn[];
   maxTokens: number;
   tokenUsageThreshold: number;
   customSystemPromptTemplate: string;
@@ -210,14 +213,71 @@ function extractFinalNonToolAssistantContent(raw: unknown): string {
   return parts.length > 0 ? parts[parts.length - 1] : fullStripped;
 }
 
-function toKotlinPairList(history: Array<[string, string]>): unknown[] {
-  const list: unknown[] = [];
-  (history || []).forEach((item) => {
-    const role = item && item.length > 0 ? String(item[0] || "") : "";
-    const content = item && item.length > 1 ? String(item[1] || "") : "";
-    list.push(new Pair(role, content));
-  });
+function toKotlinPromptTurnList(history: ToolPkg.PromptTurn[]): JavaBridgeValue {
+  const list = new ArrayList();
+  for (const turn of history || []) {
+    list.add(
+      Java.newInstance(
+        "com.ai.assistance.operit.core.chat.hooks.PromptTurn",
+        resolvePromptTurnKind(turn.kind),
+        String(turn.content ?? ""),
+        typeof turn.toolName === "string" ? turn.toolName : null,
+        toJavaJsonObject(isJsonObject(turn.metadata) ? turn.metadata : undefined)
+      )
+    );
+  }
   return list;
+}
+
+function resolvePromptTurnKind(kind: ToolPkg.PromptTurnKind): JavaBridgeValue {
+  switch (kind) {
+    case "SYSTEM":
+      return PromptTurnKindClass.SYSTEM;
+    case "ASSISTANT":
+      return PromptTurnKindClass.ASSISTANT;
+    case "TOOL_CALL":
+      return PromptTurnKindClass.TOOL_CALL;
+    case "TOOL_RESULT":
+      return PromptTurnKindClass.TOOL_RESULT;
+    case "SUMMARY":
+      return PromptTurnKindClass.SUMMARY;
+    case "USER":
+    default:
+      return PromptTurnKindClass.USER;
+  }
+}
+
+function isJsonObject(value: unknown): value is ToolPkg.JsonObject {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function toJavaJsonObject(value: ToolPkg.JsonObject | undefined): JavaBridgeValue {
+  if (!value) {
+    return new LinkedHashMap();
+  }
+
+  const map = new LinkedHashMap();
+  for (const [key, item] of Object.entries(value)) {
+    map.put(String(key), toJavaValue(item));
+  }
+  return map;
+}
+
+function toJavaValue(value: ToolPkg.JsonValue | undefined): JavaBridgeValue {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (Array.isArray(value)) {
+    const list = new ArrayList();
+    for (const item of value) {
+      list.add(toJavaValue(item));
+    }
+    return list;
+  }
+  if (typeof value === "object") {
+    return toJavaJsonObject(value as ToolPkg.JsonObject);
+  }
+  return value;
 }
 
 async function collectStreamToString(stream: {
@@ -251,7 +311,7 @@ async function sendMessage(
     "sendMessage",
     options.message,
     null,
-    toKotlinPairList(options.chatHistory),
+    toKotlinPromptTurnList(options.chatHistory),
     null,
     null,
     FunctionType.CHAT,
