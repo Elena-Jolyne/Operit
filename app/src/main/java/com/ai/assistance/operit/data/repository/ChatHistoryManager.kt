@@ -16,6 +16,7 @@ import com.ai.assistance.operit.data.model.ChatMessage
 import com.ai.assistance.operit.data.model.CharacterCardChatStats
 import com.ai.assistance.operit.data.model.CharacterGroupChatStats
 import com.ai.assistance.operit.data.model.MessageEntity
+import com.ai.assistance.operit.data.model.WorkspaceRenameResult
 import com.ai.assistance.operit.util.LocaleUtils
 import com.ai.assistance.operit.data.converter.*
 import com.ai.assistance.operit.data.exporter.*
@@ -750,6 +751,72 @@ class ChatHistoryManager private constructor(private val context: Context) {
                 AppLogger.e(TAG, "Failed to update chat workspace for chat $chatId", e)
                 throw e
             }
+        }
+    }
+
+    suspend fun renameManagedWorkspace(
+        chatId: String,
+        newWorkspaceName: String
+    ): WorkspaceRenameResult {
+        chatMutex(chatId).withLock {
+            val trimmedName = newWorkspaceName.trim()
+            if (trimmedName.isEmpty()) {
+                throw IllegalArgumentException(context.getString(R.string.workspace_rename_name_empty))
+            }
+            if (
+                trimmedName == "." ||
+                trimmedName == ".." ||
+                trimmedName.contains('/') ||
+                trimmedName.contains('\\')
+            ) {
+                throw IllegalArgumentException(context.getString(R.string.workspace_rename_name_invalid))
+            }
+
+            val chat = chatDao.getChatById(chatId)
+                ?: throw IllegalStateException(context.getString(R.string.workspace_rename_chat_missing))
+            val workspacePath = chat.workspace
+                ?: throw IllegalStateException(context.getString(R.string.chat_not_bound_to_workspace))
+            if (!chat.workspaceEnv.isNullOrBlank()) {
+                throw IllegalStateException(
+                    context.getString(R.string.workspace_rename_only_managed_supported)
+                )
+            }
+
+            val workspaceRoot = File(context.filesDir, "workspace").apply { mkdirs() }.canonicalFile
+            val sourceDir = File(workspacePath).canonicalFile
+            if (!sourceDir.exists() || !sourceDir.isDirectory) {
+                throw IllegalStateException(context.getString(R.string.workspace_directory_invalid))
+            }
+            if (sourceDir.parentFile?.canonicalFile != workspaceRoot) {
+                throw IllegalStateException(
+                    context.getString(R.string.workspace_rename_only_managed_supported)
+                )
+            }
+
+            val targetDir = File(workspaceRoot, trimmedName).canonicalFile
+            if (targetDir.parentFile?.canonicalFile != workspaceRoot) {
+                throw IllegalArgumentException(context.getString(R.string.workspace_rename_name_invalid))
+            }
+            if (targetDir != sourceDir && targetDir.exists()) {
+                throw IllegalArgumentException(context.getString(R.string.workspace_rename_name_exists))
+            }
+
+            if (targetDir != sourceDir && !sourceDir.renameTo(targetDir)) {
+                throw IOException(context.getString(R.string.workspace_rename_failed))
+            }
+
+            chatDao.updateChatTitleAndWorkspace(
+                chatId = chatId,
+                title = trimmedName,
+                workspace = targetDir.absolutePath,
+                workspaceEnv = chat.workspaceEnv
+            )
+
+            return WorkspaceRenameResult(
+                workspacePath = targetDir.absolutePath,
+                workspaceEnv = chat.workspaceEnv,
+                workspaceName = trimmedName
+            )
         }
     }
 

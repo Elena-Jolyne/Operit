@@ -1682,6 +1682,8 @@
     <string name="workspace_project_type_go_description">For Go development, includes go mod and build commands</string>
     <string name="workspace_project_type_android_title">Android Project</string>
     <string name="workspace_project_type_android_description">For Android development with quick Gradle task shortcuts</string>
+    <string name="workspace_project_type_flutter_title">Flutter Project</string>
+    <string name="workspace_project_type_flutter_description">For Flutter cross-platform development, includes the current stable app template and common command shortcuts</string>
     <string name="please_select_or_create_conversation">Please select or create a conversation first</string>
     <string name="latest">Latest</string>
     <string name="main_highlights">✨ Main Highlights</string>
@@ -2148,7 +2150,7 @@
     <string name="theme_chat_input_liquid_glass">Frosted Glass Input Box</string>
     <string name="theme_chat_input_liquid_glass_desc">When enabled, the transparent input box will use an iOS-style frosted glass effect</string>
     <string name="theme_chat_input_water_glass">Water Glass Input Box</string>
-    <string name="theme_chat_input_water_glass_desc">When enabled, the transparent input box will use a water glass effect and disable frosted glass</string>
+    <string name="theme_chat_input_water_glass_desc">When enabled, the transparent input box will use a water glass effect</string>
     <string name="theme_toolbar_transparent">Toolbar Settings</string>
     <string name="theme_toolbar_transparent_desc">Transparent Toolbar</string>
     <string name="theme_toolbar_transparent_desc_desc">When enabled, the toolbar will become transparent</string>
@@ -3184,6 +3186,8 @@
     <string name="workspace_project_office_description">For document editing, file processing, and general office tasks</string>
     <string name="workspace_project_android_title">Android Project</string>
     <string name="workspace_project_android_description">For Android development with quick Gradle task shortcuts</string>
+    <string name="workspace_project_flutter_title">Flutter Project</string>
+    <string name="workspace_project_flutter_description">Flutter cross-platform app template with base structure for Android, iOS, Web, and desktop</string>
 
     <!-- Workspace UI -->
     <string name="workspace_preview">Preview</string>
@@ -3196,6 +3200,17 @@
     <string name="workspace_click_buttons_below">Click buttons below to execute commands</string>
     <string name="workspace_no_commands_configured">No commands configured\n\nYou can add command button configurations in .operit/config.json</string>
     <string name="workspace_path_label">Workspace Path</string>
+    <string name="workspace_rename_action">Rename Workspace</string>
+    <string name="workspace_rename_title">Rename Workspace</string>
+    <string name="workspace_rename_hint">This will update both the current chat title and the workspace folder name. The new name must be unique within the app-managed workspaces.</string>
+    <string name="workspace_rename_name_empty">Name cannot be empty</string>
+    <string name="workspace_rename_name_invalid">Name cannot contain / or \\ and cannot be . or ..</string>
+    <string name="workspace_rename_name_exists">A workspace with this name already exists. Please choose another one</string>
+    <string name="workspace_rename_only_managed_supported">Only app-managed internal workspaces can be renamed right now</string>
+    <string name="workspace_rename_chat_missing">The current chat no longer exists, so the workspace cannot be renamed</string>
+    <string name="workspace_rename_failed">Failed to rename workspace</string>
+    <string name="workspace_rename_success">Workspace renamed to %1$s</string>
+    <string name="workspace_rename_save_first">Please save all modified files before renaming the workspace</string>
 
     <!-- Workspace Commands (Command labels) -->
     <string name="workspace_preview_button_label_browser">Browser Preview</string>
@@ -3219,6 +3234,14 @@
     <string name="workspace_cmd_android_share_release_apk">Share Release APK</string>
     <string name="workspace_cmd_android_lint">Run Lint</string>
     <string name="workspace_cmd_android_test">Run Tests</string>
+    <string name="workspace_cmd_flutter_setup_env">Initialize Environment</string>
+    <string name="workspace_cmd_flutter_doctor">Check Flutter Environment</string>
+    <string name="workspace_cmd_flutter_pub_get">Get Dependencies</string>
+    <string name="workspace_cmd_flutter_run_web">Start Web Preview</string>
+    <string name="workspace_cmd_flutter_analyze">Static Analysis</string>
+    <string name="workspace_cmd_flutter_test">Run Tests</string>
+    <string name="workspace_cmd_flutter_build_apk">Build APK</string>
+    <string name="workspace_cmd_flutter_build_web">Build Web</string>
 
     <string name="chat_added_files_count">Added %1$d file(s)</string>
     <string name="chat_process_shared_files_failed">Failed to process shared files: %1$s</string>
@@ -3290,6 +3313,9 @@
     <string name="expand_verb">Expand</string>
     <string name="hide_history">Hide history</string>
     <string name="show_history">Show history</string>
+    <string name="history_fast_scroll">Fast History Scroll</string>
+    <string name="history_scroll_to_top">Scroll to Top</string>
+    <string name="history_scroll_to_bottom">Scroll to Bottom</string>
     <string name="open_floating_window">Open floating window</string>
     <string name="ungrouped">Ungrouped</string>
     <string name="manage_group">Manage Group</string>
@@ -3616,9 +3642,13 @@
     <string name="chat_style_cursor_user_bubble_liquid_glass">Command-style user bubble frosted glass</string>
     <string name="chat_style_cursor_user_bubble_liquid_glass_desc">When enabled, the command-style user bubble background will use an iOS-style frosted glass effect</string>
     <string name="chat_style_cursor_user_bubble_water_glass">Command-style user bubble water glass</string>
-    <string name="chat_style_cursor_user_bubble_water_glass_desc">When enabled, the command-style user bubble background will use a water glass effect and disable frosted glass</string>
+    <string name="chat_style_cursor_user_bubble_water_glass_desc">When enabled, the command-style user bubble background will use a water glass effect</string>
     <string name="chat_style_cursor_user_bubble_color">Command-style user bubble</string>
     <string name="chat_style_bubble_color_title">Dialog-style bubble colors</string>
+    <string name="chat_style_bubble_user_bubble_liquid_glass">Dialog-style user bubble frosted glass</string>
+    <string name="chat_style_bubble_user_bubble_liquid_glass_desc">When enabled, the dialog-style user bubble background will use an iOS-style frosted glass effect</string>
+    <string name="chat_style_bubble_user_bubble_water_glass">Dialog-style user bubble water glass</string>
+    <string name="chat_style_bubble_user_bubble_water_glass_desc">When enabled, the dialog-style user bubble background will use a water glass effect</string>
     <string name="chat_style_bubble_user_color">User bubble</string>
     <string name="chat_style_bubble_ai_color">AI bubble</string>
     <string name="chat_style_bubble_user_image_title">User bubble image</string>

@@ -29,10 +29,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.rememberNestedScrollInteropConnection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.viewinterop.AndroidView
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.ui.common.animations.SimpleAnimatedVisibility
@@ -1003,38 +1005,64 @@ class CustomXmlRenderer(
         // 如果内容不为空，则作为HTML渲染
         if (htmlContent.isNotBlank()) {
             val context = LocalContext.current
+            val nestedScrollInterop = rememberNestedScrollInteropConnection()
             
             // 应用内置样式
-            val styledHtml = applyBuiltInStyles(htmlContent, className, customColor, textColor)
+            val styledHtml = remember(htmlContent, className, customColor, textColor) {
+                applyBuiltInStyles(htmlContent, className, customColor, textColor)
+            }
             
             // 构建完整的HTML文档
-            val fullHtml = buildFullHtmlDocument(styledHtml, textColor)
+            val fullHtml = remember(styledHtml, textColor) {
+                buildFullHtmlDocument(styledHtml, textColor)
+            }
+
+            val webView = remember(context) {
+                WebView(context).apply {
+                    settings.apply {
+                        javaScriptEnabled = true
+                        javaScriptCanOpenWindowsAutomatically = true
+                        domStorageEnabled = true
+                        databaseEnabled = true
+                        allowFileAccess = true
+                        allowContentAccess = true
+                        allowFileAccessFromFileURLs = true
+                        allowUniversalAccessFromFileURLs = true
+                        loadWithOverviewMode = true
+                        useWideViewPort = true
+                        builtInZoomControls = false
+                        displayZoomControls = false
+                        cacheMode = WebSettings.LOAD_DEFAULT
+                        mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                    }
+                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                }
+            }
+
+            DisposableEffect(webView) {
+                onDispose {
+                    try {
+                        webView.stopLoading()
+                        webView.loadUrl("about:blank")
+                        webView.clearHistory()
+                        webView.removeAllViews()
+                        webView.destroy()
+                    } catch (_: Throwable) {
+                    }
+                }
+            }
+
+            // 避免在滚动/重组时反复 loadData，只有 HTML 内容真正变化时才重载 WebView。
+            LaunchedEffect(webView, fullHtml) {
+                webView.loadDataWithBaseURL(null, fullHtml, "text/html", "UTF-8", null)
+            }
             
             AndroidView(
-                modifier = modifier.fillMaxWidth().padding(vertical = 4.dp),
-                factory = { ctx ->
-                    WebView(ctx).apply {
-                        settings.apply {
-                            javaScriptEnabled = false
-                            domStorageEnabled = false
-                            loadWithOverviewMode = true
-                            useWideViewPort = true
-                            builtInZoomControls = false
-                            displayZoomControls = false
-                        }
-                        // 使用软件渲染层，这有助于解决在Compose中嵌入WebView时可能出现的渲染线程崩溃问题，
-                        // 尤其是在涉及硬件加速的复杂视图层级中。
-                        setLayerType(WebView.LAYER_TYPE_SOFTWARE, null)
-                        setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                    }
-                },
-                update = { webView ->
-                    webView.loadDataWithBaseURL(null, fullHtml, "text/html", "UTF-8", null)
-                },
-                onRelease = { webView ->
-                    // 在视图被销毁时，明确调用destroy()以释放WebView资源，防止内存泄漏和崩溃。
-                    webView.destroy()
-                }
+                modifier = modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .nestedScroll(nestedScrollInterop),
+                factory = { webView }
             )
         }
     }

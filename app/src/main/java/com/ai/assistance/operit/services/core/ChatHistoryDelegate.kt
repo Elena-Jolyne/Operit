@@ -6,6 +6,7 @@ import com.ai.assistance.operit.R
 import com.ai.assistance.operit.api.chat.EnhancedAIService
 import com.ai.assistance.operit.data.model.ChatHistory
 import com.ai.assistance.operit.data.model.ChatMessage
+import com.ai.assistance.operit.data.model.WorkspaceRenameResult
 import com.ai.assistance.operit.data.repository.ChatHistoryManager
 import java.time.LocalDateTime
 import java.util.concurrent.atomic.AtomicBoolean
@@ -763,6 +764,27 @@ class ChatHistoryDelegate(
                     }
             _chatHistories.value = updatedHistories
         }
+    }
+
+    suspend fun renameWorkspaceAndChat(
+        chatId: String,
+        newWorkspaceName: String
+    ): WorkspaceRenameResult {
+        val result = chatHistoryManager.renameManagedWorkspace(chatId, newWorkspaceName)
+        _chatHistories.value =
+            _chatHistories.value.map {
+                if (it.id == chatId) {
+                    it.copy(
+                        title = result.workspaceName,
+                        workspace = result.workspacePath,
+                        workspaceEnv = result.workspaceEnv,
+                        updatedAt = LocalDateTime.now()
+                    )
+                } else {
+                    it
+                }
+            }
+        return result
     }
 
     /** 根据第一条用户消息生成聊天标题 */

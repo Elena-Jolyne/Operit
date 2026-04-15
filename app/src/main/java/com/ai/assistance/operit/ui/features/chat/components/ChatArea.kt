@@ -308,6 +308,8 @@ fun ChatArea(
     cursorUserBubbleWaterGlass: Boolean = false,
     bubbleUserBubbleLiquidGlass: Boolean = false,
     bubbleUserBubbleWaterGlass: Boolean = false,
+    bubbleAiBubbleLiquidGlass: Boolean = false,
+    bubbleAiBubbleWaterGlass: Boolean = false,
     isMultiSelectMode: Boolean = false, // 是否处于多选模式
     selectedMessageIndices: Set<Int> = emptySet(), // 已选中的消息索引集合
     onToggleMultiSelectMode: ((Int?) -> Unit)? = null, // 切换多选模式的回调，可传入要初始选中的消息索引
@@ -544,6 +546,8 @@ fun ChatArea(
                             cursorUserBubbleWaterGlass = cursorUserBubbleWaterGlass,
                             bubbleUserBubbleLiquidGlass = bubbleUserBubbleLiquidGlass,
                             bubbleUserBubbleWaterGlass = bubbleUserBubbleWaterGlass,
+                            bubbleAiBubbleLiquidGlass = bubbleAiBubbleLiquidGlass,
+                            bubbleAiBubbleWaterGlass = bubbleAiBubbleWaterGlass,
                             isHidden = shouldHide,
                             isMultiSelectMode = isMultiSelectMode,
                             isSelected = selectedMessageIndices.contains(actualIndex),
@@ -675,6 +679,8 @@ private fun MessageItem(
     cursorUserBubbleWaterGlass: Boolean = false,
     bubbleUserBubbleLiquidGlass: Boolean = false,
     bubbleUserBubbleWaterGlass: Boolean = false,
+    bubbleAiBubbleLiquidGlass: Boolean = false,
+    bubbleAiBubbleWaterGlass: Boolean = false,
     isHidden: Boolean = false, // 新增参数控制隐藏
     isMultiSelectMode: Boolean = false, // 是否处于多选模式
     isSelected: Boolean = false, // 是否被选中
@@ -759,6 +765,8 @@ private fun MessageItem(
                     systemTextColor = systemTextColor,
                     userMessageLiquidGlassEnabled = bubbleUserBubbleLiquidGlass,
                     userMessageWaterGlassEnabled = bubbleUserBubbleWaterGlass,
+                    aiMessageLiquidGlassEnabled = bubbleAiBubbleLiquidGlass,
+                    aiMessageWaterGlassEnabled = bubbleAiBubbleWaterGlass,
                     userBubbleImageStyle = bubbleUserImageStyle,
                     aiBubbleImageStyle = bubbleAiImageStyle,
                     bubbleUserRoundedCornersEnabled = bubbleUserRoundedCornersEnabled,

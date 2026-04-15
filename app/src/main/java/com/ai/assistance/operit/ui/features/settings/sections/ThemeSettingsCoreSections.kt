@@ -264,6 +264,10 @@ internal fun ThemeSettingsChatStyleSection(
     onBubbleUserBubbleLiquidGlassInputChange: (Boolean) -> Unit,
     bubbleUserBubbleWaterGlassInput: Boolean,
     onBubbleUserBubbleWaterGlassInputChange: (Boolean) -> Unit,
+    bubbleAiBubbleLiquidGlassInput: Boolean,
+    onBubbleAiBubbleLiquidGlassInputChange: (Boolean) -> Unit,
+    bubbleAiBubbleWaterGlassInput: Boolean,
+    onBubbleAiBubbleWaterGlassInputChange: (Boolean) -> Unit,
     cursorUserBubbleColorInput: Int,
     bubbleUserBubbleColorInput: Int,
     bubbleAiBubbleColorInput: Int,
@@ -616,6 +620,8 @@ internal fun ThemeSettingsChatStyleSection(
                 }
             val previewAiImageStyle =
                 remember(
+                    bubbleAiBubbleLiquidGlassInput,
+                    bubbleAiBubbleWaterGlassInput,
                     bubbleAiUseImageInput,
                     bubbleAiImageUriInput,
                     bubbleAiImageCropLeftInput,
@@ -630,7 +636,12 @@ internal fun ThemeSettingsChatStyleSection(
                     bubbleImageRenderModeInput,
                 ) {
                     val imageUri = bubbleAiImageUriInput
-                    if (bubbleAiUseImageInput && !imageUri.isNullOrBlank()) {
+                    if (
+                        !bubbleAiBubbleLiquidGlassInput &&
+                            !bubbleAiBubbleWaterGlassInput &&
+                            bubbleAiUseImageInput &&
+                            !imageUri.isNullOrBlank()
+                    ) {
                         BubbleImageStyleConfig(
                             imageUri = imageUri,
                             cropLeftRatio = bubbleAiImageCropLeftInput,
@@ -823,6 +834,92 @@ internal fun ThemeSettingsChatStyleSection(
                                     bubbleUserBubbleWaterGlass = it,
                                     bubbleUserBubbleLiquidGlass = if (it) false else null,
                                     bubbleUserUseImage = if (it) false else null,
+                                )
+                            }
+                        },
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text =
+                                stringResource(
+                                    id = R.string.chat_style_bubble_ai_bubble_liquid_glass,
+                                ),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            text =
+                                stringResource(
+                                    id = R.string.chat_style_bubble_ai_bubble_liquid_glass_desc,
+                                ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = bubbleAiBubbleLiquidGlassInput,
+                        onCheckedChange = {
+                            onBubbleAiBubbleLiquidGlassInputChange(it)
+                            if (it) {
+                                onBubbleAiBubbleWaterGlassInputChange(false)
+                                onBubbleAiUseImageInputChange(false)
+                            }
+                            saveThemeSettingsWithCharacterCard {
+                                preferencesManager.saveThemeSettings(
+                                    bubbleAiBubbleLiquidGlass = it,
+                                    bubbleAiBubbleWaterGlass = if (it) false else null,
+                                    bubbleAiUseImage = if (it) false else null,
+                                )
+                            }
+                        },
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text =
+                                stringResource(
+                                    id = R.string.chat_style_bubble_ai_bubble_water_glass,
+                                ),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            text =
+                                stringResource(
+                                    id = R.string.chat_style_bubble_ai_bubble_water_glass_desc,
+                                ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = bubbleAiBubbleWaterGlassInput,
+                        onCheckedChange = {
+                            onBubbleAiBubbleWaterGlassInputChange(it)
+                            if (it) {
+                                onBubbleAiBubbleLiquidGlassInputChange(false)
+                                onBubbleAiUseImageInputChange(false)
+                            }
+                            saveThemeSettingsWithCharacterCard {
+                                preferencesManager.saveThemeSettings(
+                                    bubbleAiBubbleWaterGlass = it,
+                                    bubbleAiBubbleLiquidGlass = if (it) false else null,
+                                    bubbleAiUseImage = if (it) false else null,
                                 )
                             }
                         },
@@ -1217,8 +1314,20 @@ internal fun ThemeSettingsChatStyleSection(
 
                 BubbleImageStyleEditor(
                     title = stringResource(id = R.string.chat_style_bubble_ai_image_title),
-                    enabled = bubbleAiUseImageInput,
-                    description = stringResource(id = R.string.chat_style_bubble_image_desc),
+                    enabled =
+                        !bubbleAiBubbleLiquidGlassInput &&
+                            !bubbleAiBubbleWaterGlassInput &&
+                            bubbleAiUseImageInput,
+                    switchEnabled =
+                        !bubbleAiBubbleLiquidGlassInput && !bubbleAiBubbleWaterGlassInput,
+                    description =
+                        if (bubbleAiBubbleLiquidGlassInput || bubbleAiBubbleWaterGlassInput) {
+                            stringResource(
+                                id = R.string.chat_style_bubble_ai_image_disabled_by_glass,
+                            )
+                        } else {
+                            stringResource(id = R.string.chat_style_bubble_image_desc)
+                        },
                     onEnabledChange = {
                         onBubbleAiUseImageInputChange(it)
                         saveThemeSettingsWithCharacterCard {

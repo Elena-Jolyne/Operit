@@ -1135,6 +1135,10 @@ class MessageProcessingDelegate(
             _turnCompleteCounterByChatId.value = updated
         }
         val nextWindowSize = calculateNextWindowSize?.invoke()
+        AppLogger.d(
+            TAG,
+            "回合完成: chatId=$activeChatId, nextWindow=$nextWindowSize, service=${service.javaClass.simpleName}"
+        )
         onTurnComplete(activeChatId, service, nextWindowSize)
     }
 

@@ -240,7 +240,8 @@ class ModelConfigManager(private val context: Context) {
                 ModelConfigData(
                         id = configId,
                         name = name,
-                        apiProviderType = ApiProviderType.OPENAI_GENERIC
+                        apiProviderType = ApiProviderType.OPENAI_GENERIC,
+                        enableToolCall = true
                 )
 
         // 保存新配置

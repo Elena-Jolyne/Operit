@@ -311,6 +311,20 @@ fun WorkspaceManager(
     
     // 控制可展开FAB的菜单状态
     var isFabMenuExpanded by remember { mutableStateOf(false) }
+
+    var showRenameWorkspaceDialog by remember { mutableStateOf(false) }
+    var renameWorkspaceInput by remember(workspacePath) { mutableStateOf(File(workspacePath).name) }
+    var renameWorkspaceError by remember { mutableStateOf<String?>(null) }
+    var isRenamingWorkspace by remember { mutableStateOf(false) }
+    val canRenameWorkspace by remember(workspacePath, workspaceEnv) {
+        mutableStateOf(
+            !isSafEnv &&
+                runCatching {
+                    val workspaceRoot = File(context.filesDir, "workspace").canonicalFile
+                    File(workspacePath).canonicalFile.parentFile?.canonicalFile == workspaceRoot
+                }.getOrDefault(false)
+        )
+    }
     
     // 解绑确认对话框状态
     var showUnbindConfirmDialog by remember { mutableStateOf(false) }
@@ -971,6 +985,17 @@ fun WorkspaceManager(
                     showUnbindConfirmDialog = true
                     isFabMenuExpanded = false
                 },
+                renameEnabled = canRenameWorkspace,
+                onRenameWorkspaceClick = {
+                    if (unsavedFiles.isNotEmpty()) {
+                        actualViewModel.showToast(context.getString(R.string.workspace_rename_save_first))
+                    } else {
+                        renameWorkspaceInput = File(workspacePath).name
+                        renameWorkspaceError = null
+                        showRenameWorkspaceDialog = true
+                    }
+                    isFabMenuExpanded = false
+                },
                 canFormat = openFiles.getOrNull(currentFileIndex)?.let { file ->
                     val language = LanguageDetector.detectLanguage(file.name).lowercase()
                     language in listOf("javascript", "js", "css", "html", "htm")
@@ -996,6 +1021,88 @@ fun WorkspaceManager(
                 },
                 dismissButton = {
                     TextButton(onClick = { showUnbindConfirmDialog = false }) {
+                        Text(context.getString(R.string.cancel))
+                    }
+                }
+            )
+        }
+
+        if (showRenameWorkspaceDialog) {
+            AlertDialog(
+                onDismissRequest = {
+                    if (!isRenamingWorkspace) {
+                        showRenameWorkspaceDialog = false
+                        renameWorkspaceError = null
+                    }
+                },
+                title = { Text(context.getString(R.string.workspace_rename_title)) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedTextField(
+                            value = renameWorkspaceInput,
+                            onValueChange = {
+                                renameWorkspaceInput = it
+                                renameWorkspaceError = null
+                            },
+                            label = { Text(context.getString(R.string.file_dialog_new_name)) },
+                            singleLine = true,
+                            isError = renameWorkspaceError != null,
+                            supportingText = {
+                                renameWorkspaceError?.let { Text(it) }
+                            }
+                        )
+                        Text(
+                            text = context.getString(R.string.workspace_rename_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        enabled = !isRenamingWorkspace,
+                        onClick = {
+                            if (unsavedFiles.isNotEmpty()) {
+                                renameWorkspaceError =
+                                    context.getString(R.string.workspace_rename_save_first)
+                                return@TextButton
+                            }
+                            isRenamingWorkspace = true
+                            coroutineScope.launch {
+                                runCatching {
+                                    actualViewModel.renameWorkspace(
+                                        chatId = currentChat.id,
+                                        newWorkspaceName = renameWorkspaceInput
+                                    )
+                                }.onSuccess { result ->
+                                    actualViewModel.showToast(
+                                        context.getString(
+                                            R.string.workspace_rename_success,
+                                            result.workspaceName
+                                        )
+                                    )
+                                    showRenameWorkspaceDialog = false
+                                    renameWorkspaceError = null
+                                }.onFailure { error ->
+                                    renameWorkspaceError =
+                                        error.message
+                                            ?: context.getString(R.string.workspace_rename_failed)
+                                }
+                                isRenamingWorkspace = false
+                            }
+                        }
+                    ) {
+                        Text(context.getString(R.string.confirm_action))
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        enabled = !isRenamingWorkspace,
+                        onClick = {
+                            showRenameWorkspaceDialog = false
+                            renameWorkspaceError = null
+                        }
+                    ) {
                         Text(context.getString(R.string.cancel))
                     }
                 }
@@ -1220,6 +1327,8 @@ fun ExpandableFabMenu(
     onRedoClick: () -> Unit,
     onFormatClick: () -> Unit,
     onUnbindClick: () -> Unit,
+    renameEnabled: Boolean = false,
+    onRenameWorkspaceClick: () -> Unit,
     canFormat: Boolean = false
 ) {
     val context = LocalContext.current
@@ -1281,6 +1390,14 @@ fun ExpandableFabMenu(
             Spacer(modifier = Modifier.height(12.dp))
             if (exportEnabled) {
                 FabMenuItem(icon = Icons.Default.Upload, text = context.getString(R.string.export), onClick = onExportClick)
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+            if (renameEnabled) {
+                FabMenuItem(
+                    icon = Icons.Default.Edit,
+                    text = context.getString(R.string.workspace_rename_action),
+                    onClick = onRenameWorkspaceClick
+                )
                 Spacer(modifier = Modifier.height(12.dp))
             }
             FabMenuItem(icon = Icons.Default.LinkOff, text = context.getString(R.string.unbind), onClick = onUnbindClick)

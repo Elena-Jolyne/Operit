@@ -301,6 +301,12 @@ fun ThemeSettingsScreen() {
         preferencesManager.bubbleUserBubbleWaterGlass.collectAsState(initial = false).value
     val bubbleUserBubbleLiquidGlass =
         bubbleUserBubbleLiquidGlassRaw && !bubbleUserBubbleWaterGlass
+    val bubbleAiBubbleLiquidGlassRaw =
+        preferencesManager.bubbleAiBubbleLiquidGlass.collectAsState(initial = false).value
+    val bubbleAiBubbleWaterGlass =
+        preferencesManager.bubbleAiBubbleWaterGlass.collectAsState(initial = false).value
+    val bubbleAiBubbleLiquidGlass =
+        bubbleAiBubbleLiquidGlassRaw && !bubbleAiBubbleWaterGlass
     val cursorUserBubbleColor =
         preferencesManager.cursorUserBubbleColor.collectAsState(initial = null).value
     val bubbleUserBubbleColor =
@@ -532,6 +538,10 @@ fun ThemeSettingsScreen() {
         remember { mutableStateOf(bubbleUserBubbleLiquidGlass) }
     var bubbleUserBubbleWaterGlassInput by
         remember { mutableStateOf(bubbleUserBubbleWaterGlass) }
+    var bubbleAiBubbleLiquidGlassInput by
+        remember { mutableStateOf(bubbleAiBubbleLiquidGlass) }
+    var bubbleAiBubbleWaterGlassInput by
+        remember { mutableStateOf(bubbleAiBubbleWaterGlass) }
     var cursorUserBubbleColorInput by
         remember { mutableStateOf(cursorUserBubbleColor ?: defaultCursorUserBubbleColor) }
     var bubbleUserBubbleColorInput by
@@ -927,11 +937,15 @@ fun ThemeSettingsScreen() {
                         if (internalUri != null) {
                             if (bubbleImagePickerTarget == "ai") {
                                 bubbleAiImageUriInput = internalUri.toString()
-                                bubbleAiUseImageInput = true
+                                bubbleAiUseImageInput =
+                                    !bubbleAiBubbleLiquidGlassInput &&
+                                        !bubbleAiBubbleWaterGlassInput
                                 saveThemeSettingsWithCharacterCard {
                                     preferencesManager.saveThemeSettings(
                                         bubbleAiImageUri = internalUri.toString(),
-                                        bubbleAiUseImage = true,
+                                        bubbleAiUseImage =
+                                            !bubbleAiBubbleLiquidGlassInput &&
+                                                !bubbleAiBubbleWaterGlassInput,
                                     )
                                 }
                             } else {
@@ -1035,7 +1049,9 @@ fun ThemeSettingsScreen() {
 
                     if (bubbleImagePickerTarget == "ai") {
                         bubbleAiImageUriInput = internalUriString
-                        bubbleAiUseImageInput = true
+                        bubbleAiUseImageInput =
+                            !bubbleAiBubbleLiquidGlassInput &&
+                                !bubbleAiBubbleWaterGlassInput
                         bubbleAiImageCropLeftInput = autoParams.cropLeftRatio
                         bubbleAiImageCropTopInput = autoParams.cropTopRatio
                         bubbleAiImageCropRightInput = autoParams.cropRightRatio
@@ -1048,7 +1064,9 @@ fun ThemeSettingsScreen() {
                         saveThemeSettingsWithCharacterCard {
                             preferencesManager.saveThemeSettings(
                                 bubbleAiImageUri = internalUriString,
-                                bubbleAiUseImage = true,
+                                bubbleAiUseImage =
+                                    !bubbleAiBubbleLiquidGlassInput &&
+                                        !bubbleAiBubbleWaterGlassInput,
                                 bubbleAiImageCropLeft = autoParams.cropLeftRatio,
                                 bubbleAiImageCropTop = autoParams.cropTopRatio,
                                 bubbleAiImageCropRight = autoParams.cropRightRatio,
@@ -1180,6 +1198,8 @@ fun ThemeSettingsScreen() {
             cursorUserBubbleWaterGlass,
             bubbleUserBubbleLiquidGlass,
             bubbleUserBubbleWaterGlass,
+            bubbleAiBubbleLiquidGlass,
+            bubbleAiBubbleWaterGlass,
             cursorUserBubbleColor,
             bubbleUserBubbleColor,
             bubbleAiBubbleColor,
@@ -1279,6 +1299,8 @@ fun ThemeSettingsScreen() {
         cursorUserBubbleWaterGlassInput = cursorUserBubbleWaterGlass
         bubbleUserBubbleLiquidGlassInput = bubbleUserBubbleLiquidGlass
         bubbleUserBubbleWaterGlassInput = bubbleUserBubbleWaterGlass
+        bubbleAiBubbleLiquidGlassInput = bubbleAiBubbleLiquidGlass
+        bubbleAiBubbleWaterGlassInput = bubbleAiBubbleWaterGlass
         cursorUserBubbleColorInput = cursorUserBubbleColor ?: defaultCursorUserBubbleColor
         bubbleUserBubbleColorInput = bubbleUserBubbleColor ?: defaultBubbleUserBubbleColor
         bubbleAiBubbleColorInput = bubbleAiBubbleColor ?: defaultBubbleAiBubbleColor
@@ -1520,72 +1542,216 @@ fun ThemeSettingsScreen() {
     // Add a scroll state that we can control
     val scrollState = rememberScrollState()
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(scrollState)) {
-        ThemeSettingsCharacterBindingInfoCard(
-            aiAvatarUri = activeThemeTargetAvatarUri ?: aiAvatarUri,
-            activeCharacterName = activeThemeTargetName,
-            isGroupTarget = isGroupThemeTarget,
-            cardColors = cardModifier,
-        )
+    suspend fun resetThemeSettingsAndUi() {
+        preferencesManager.resetThemeSettings()
+        if (isGroupThemeTarget) {
+            activeCharacterGroup?.id?.let { preferencesManager.deleteCharacterGroupTheme(it) }
+        } else {
+            activeCharacterCard?.id?.let { preferencesManager.deleteCharacterCardTheme(it) }
+        }
 
-        ThemeSettingsThemeModeSection(
-            cardColors = cardModifier,
-            useSystemThemeInput = useSystemThemeInput,
-            onUseSystemThemeInputChange = { useSystemThemeInput = it },
-            themeModeInput = themeModeInput,
-            onThemeModeInputChange = { themeModeInput = it },
-            saveThemeSettingsWithCharacterCard = ::saveThemeSettingsWithCharacterCard,
-            preferencesManager = preferencesManager,
-        )
+        themeModeInput = UserPreferencesManager.THEME_MODE_LIGHT
+        useSystemThemeInput = true
+        primaryColorInput = defaultPrimaryColor
+        secondaryColorInput = defaultSecondaryColor
+        useCustomColorsInput = false
+        useBackgroundImageInput = false
+        backgroundImageUriInput = null
+        backgroundImageOpacityInput = 0.3f
+        backgroundMediaTypeInput = UserPreferencesManager.MEDIA_TYPE_IMAGE
+        videoBackgroundMutedInput = true
+        videoBackgroundLoopInput = true
+        toolbarTransparentInput = false
+        useCustomAppBarColorInput = false
+        customAppBarColorInput = defaultPrimaryColor
+        useCustomStatusBarColorInput = false
+        customStatusBarColorInput = defaultPrimaryColor
+        statusBarTransparentInput = false
+        statusBarHiddenInput = false
+        chatHeaderTransparentInput = false
+        chatInputTransparentInput = false
+        chatInputFloatingInput = false
+        chatInputLiquidGlassInput = false
+        chatInputWaterGlassInput = false
+        chatHeaderOverlayModeInput = false
+        forceAppBarContentColorInput = false
+        appBarContentColorModeInput = UserPreferencesManager.APP_BAR_CONTENT_COLOR_MODE_LIGHT
+        chatHeaderHistoryIconColorInput = Color.Gray.toArgb()
+        chatHeaderPipIconColorInput = Color.Gray.toArgb()
+        useBackgroundBlurInput = false
+        backgroundBlurRadiusInput = 10f
+        chatStyleInput = UserPreferencesManager.CHAT_STYLE_CURSOR
+        inputStyleInput = UserPreferencesManager.INPUT_STYLE_AGENT
+        bubbleShowAvatarInput = true
+        bubbleWideLayoutEnabledInput = false
+        cursorUserBubbleFollowThemeInput = true
+        cursorUserBubbleLiquidGlassInput = false
+        cursorUserBubbleWaterGlassInput = false
+        bubbleUserBubbleLiquidGlassInput = false
+        bubbleUserBubbleWaterGlassInput = false
+        bubbleAiBubbleLiquidGlassInput = false
+        bubbleAiBubbleWaterGlassInput = false
+        cursorUserBubbleColorInput = defaultCursorUserBubbleColor
+        bubbleUserBubbleColorInput = defaultBubbleUserBubbleColor
+        bubbleAiBubbleColorInput = defaultBubbleAiBubbleColor
+        bubbleUserTextColorInput = defaultBubbleUserTextColor
+        bubbleAiTextColorInput = defaultBubbleAiTextColor
+        bubbleUserTextColorCustomizedInput = false
+        bubbleAiTextColorCustomizedInput = false
+        bubbleUserUseCustomFontInput = false
+        bubbleUserFontTypeInput = UserPreferencesManager.FONT_TYPE_SYSTEM
+        bubbleUserSystemFontNameInput = UserPreferencesManager.SYSTEM_FONT_DEFAULT
+        bubbleUserCustomFontPathInput = null
+        bubbleAiUseCustomFontInput = false
+        bubbleAiFontTypeInput = UserPreferencesManager.FONT_TYPE_SYSTEM
+        bubbleAiSystemFontNameInput = UserPreferencesManager.SYSTEM_FONT_DEFAULT
+        bubbleAiCustomFontPathInput = null
+        bubbleUserUseImageInput = false
+        bubbleAiUseImageInput = false
+        bubbleUserImageUriInput = null
+        bubbleAiImageUriInput = null
+        bubbleUserImageCropLeftInput = 0f
+        bubbleUserImageCropTopInput = 0f
+        bubbleUserImageCropRightInput = 0f
+        bubbleUserImageCropBottomInput = 0f
+        bubbleUserImageRepeatStartInput = 0.35f
+        bubbleUserImageRepeatEndInput = 0.65f
+        bubbleUserImageRepeatYStartInput = 0.35f
+        bubbleUserImageRepeatYEndInput = 0.65f
+        bubbleUserImageScaleInput = 1f
+        bubbleAiImageCropLeftInput = 0f
+        bubbleAiImageCropTopInput = 0f
+        bubbleAiImageCropRightInput = 0f
+        bubbleAiImageCropBottomInput = 0f
+        bubbleAiImageRepeatStartInput = 0.35f
+        bubbleAiImageRepeatEndInput = 0.65f
+        bubbleAiImageRepeatYStartInput = 0.35f
+        bubbleAiImageRepeatYEndInput = 0.65f
+        bubbleAiImageScaleInput = 1f
+        bubbleImageRenderModeInput =
+            UserPreferencesManager.BUBBLE_IMAGE_RENDER_MODE_TILED_NINE_SLICE
+        bubbleUserRoundedCornersEnabledInput = true
+        bubbleAiRoundedCornersEnabledInput = true
+        bubbleUserContentPaddingLeftInput = 12f
+        bubbleUserContentPaddingRightInput = 12f
+        bubbleAiContentPaddingLeftInput = 12f
+        bubbleAiContentPaddingRightInput = 12f
+        showThinkingProcessInput = true
+        showStatusTagsInput = true
+        showInputProcessingStatusInput = true
+        showChatFloatingDotsAnimationInput = true
+        userAvatarUriInput = null
+        aiAvatarUriInput = null
+        avatarShapeInput = UserPreferencesManager.AVATAR_SHAPE_CIRCLE
+        avatarCornerRadiusInput = 8f
+        onColorModeInput = UserPreferencesManager.ON_COLOR_MODE_AUTO
+        showSaveSuccessMessage = true
+        globalUserAvatarUriInput = null
+        globalUserNameInput = null
+        useCustomFontInput = false
+        fontTypeInput = UserPreferencesManager.FONT_TYPE_SYSTEM
+        systemFontNameInput = UserPreferencesManager.SYSTEM_FONT_DEFAULT
+        customFontPathInput = null
+        fontScaleInput = 1.0f
+    }
 
-        ThemeSettingsColorCustomizationSection(
-            cardColors = cardModifier,
-            preferencesManager = preferencesManager,
-            scope = scope,
-            saveThemeSettingsWithCharacterCard = ::saveThemeSettingsWithCharacterCard,
-            statusBarHiddenInput = statusBarHiddenInput,
-            onStatusBarHiddenInputChange = { statusBarHiddenInput = it },
-            statusBarTransparentInput = statusBarTransparentInput,
-            onStatusBarTransparentInputChange = { statusBarTransparentInput = it },
-            useCustomStatusBarColorInput = useCustomStatusBarColorInput,
-            onUseCustomStatusBarColorInputChange = { useCustomStatusBarColorInput = it },
-            customStatusBarColorInput = customStatusBarColorInput,
-            toolbarTransparentInput = toolbarTransparentInput,
-            onToolbarTransparentInputChange = { toolbarTransparentInput = it },
-            useCustomAppBarColorInput = useCustomAppBarColorInput,
-            onUseCustomAppBarColorInputChange = { useCustomAppBarColorInput = it },
-            customAppBarColorInput = customAppBarColorInput,
-            chatHeaderTransparentInput = chatHeaderTransparentInput,
-            onChatHeaderTransparentInputChange = { chatHeaderTransparentInput = it },
-            chatHeaderOverlayModeInput = chatHeaderOverlayModeInput,
-            onChatHeaderOverlayModeInputChange = { chatHeaderOverlayModeInput = it },
-            chatInputTransparentInput = chatInputTransparentInput,
-            onChatInputTransparentInputChange = { chatInputTransparentInput = it },
-            chatInputFloatingInput = chatInputFloatingInput,
-            onChatInputFloatingInputChange = { chatInputFloatingInput = it },
-            chatInputLiquidGlassInput = chatInputLiquidGlassInput,
-            onChatInputLiquidGlassInputChange = { chatInputLiquidGlassInput = it },
-            chatInputWaterGlassInput = chatInputWaterGlassInput,
-            onChatInputWaterGlassInputChange = { chatInputWaterGlassInput = it },
-            forceAppBarContentColorInput = forceAppBarContentColorInput,
-            onForceAppBarContentColorInputChange = { forceAppBarContentColorInput = it },
-            appBarContentColorModeInput = appBarContentColorModeInput,
-            onAppBarContentColorModeInputChange = { appBarContentColorModeInput = it },
-            chatHeaderHistoryIconColorInput = chatHeaderHistoryIconColorInput,
-            chatHeaderPipIconColorInput = chatHeaderPipIconColorInput,
-            useCustomColorsInput = useCustomColorsInput,
-            onUseCustomColorsInputChange = { useCustomColorsInput = it },
-            primaryColorInput = primaryColorInput,
-            secondaryColorInput = secondaryColorInput,
-            onColorModeInput = onColorModeInput,
-            onOnColorModeInputChange = { onColorModeInput = it },
-            onShowColorPicker = {
-                currentColorPickerMode = it
-                showColorPicker = true
-            },
-            onShowSaveSuccessMessage = { showSaveSuccessMessage = true },
-        )
+    fun handleThemeColorSelected(
+        primaryColor: Int?,
+        secondaryColor: Int?,
+        statusBarColor: Int?,
+        appBarColor: Int?,
+        historyIconColor: Int?,
+        pipIconColor: Int?,
+        cursorUserBubbleColor: Int?,
+        bubbleUserBubbleColor: Int?,
+        bubbleAiBubbleColor: Int?,
+        bubbleUserTextColor: Int?,
+        bubbleAiTextColor: Int?,
+    ) {
+        primaryColor?.let { primaryColorInput = it }
+        secondaryColor?.let { secondaryColorInput = it }
+        statusBarColor?.let { customStatusBarColorInput = it }
+        appBarColor?.let { customAppBarColorInput = it }
+        historyIconColor?.let { chatHeaderHistoryIconColorInput = it }
+        pipIconColor?.let { chatHeaderPipIconColorInput = it }
+        cursorUserBubbleColor?.let { cursorUserBubbleColorInput = it }
+        bubbleUserBubbleColor?.let { bubbleUserBubbleColorInput = it }
+        bubbleAiBubbleColor?.let { bubbleAiBubbleColorInput = it }
+        bubbleUserTextColor?.let {
+            bubbleUserTextColorInput = it
+            bubbleUserTextColorCustomizedInput = true
+        }
+        bubbleAiTextColor?.let {
+            bubbleAiTextColorInput = it
+            bubbleAiTextColorCustomizedInput = true
+        }
 
+        val newColor =
+            primaryColor
+                ?: secondaryColor
+                ?: statusBarColor
+                ?: appBarColor
+                ?: historyIconColor
+                ?: pipIconColor
+                ?: cursorUserBubbleColor
+                ?: bubbleUserBubbleColor
+                ?: bubbleAiBubbleColor
+                ?: bubbleUserTextColor
+                ?: bubbleAiTextColor
+        newColor?.let { scope.launch { preferencesManager.addRecentColor(it) } }
+
+        saveThemeSettingsWithCharacterCard {
+            when (currentColorPickerMode) {
+                "primary" ->
+                    primaryColor?.let {
+                        preferencesManager.saveThemeSettings(customPrimaryColor = it)
+                    }
+                "secondary" ->
+                    secondaryColor?.let {
+                        preferencesManager.saveThemeSettings(customSecondaryColor = it)
+                    }
+                "statusBar" ->
+                    statusBarColor?.let {
+                        preferencesManager.saveThemeSettings(customStatusBarColor = it)
+                    }
+                "appBar" ->
+                    appBarColor?.let {
+                        preferencesManager.saveThemeSettings(customAppBarColor = it)
+                    }
+                "historyIcon" ->
+                    historyIconColor?.let {
+                        preferencesManager.saveThemeSettings(chatHeaderHistoryIconColor = it)
+                    }
+                "pipIcon" ->
+                    pipIconColor?.let {
+                        preferencesManager.saveThemeSettings(chatHeaderPipIconColor = it)
+                    }
+                "cursorUserBubble" ->
+                    cursorUserBubbleColor?.let {
+                        preferencesManager.saveThemeSettings(cursorUserBubbleColor = it)
+                    }
+                "bubbleUserBubble" ->
+                    bubbleUserBubbleColor?.let {
+                        preferencesManager.saveThemeSettings(bubbleUserBubbleColor = it)
+                    }
+                "bubbleAiBubble" ->
+                    bubbleAiBubbleColor?.let {
+                        preferencesManager.saveThemeSettings(bubbleAiBubbleColor = it)
+                    }
+                "bubbleUserText" ->
+                    bubbleUserTextColor?.let {
+                        preferencesManager.saveThemeSettings(bubbleUserTextColor = it)
+                    }
+                "bubbleAiText" ->
+                    bubbleAiTextColor?.let {
+                        preferencesManager.saveThemeSettings(bubbleAiTextColor = it)
+                    }
+            }
+        }
+    }
+
+    @Composable
+    fun ChatStyleSectionContent() {
         ThemeSettingsChatStyleSection(
             cardColors = cardModifier,
             chatStyleInput = chatStyleInput,
@@ -1613,6 +1779,14 @@ fun ThemeSettingsScreen() {
             bubbleUserBubbleWaterGlassInput = bubbleUserBubbleWaterGlassInput,
             onBubbleUserBubbleWaterGlassInputChange = {
                 bubbleUserBubbleWaterGlassInput = it
+            },
+            bubbleAiBubbleLiquidGlassInput = bubbleAiBubbleLiquidGlassInput,
+            onBubbleAiBubbleLiquidGlassInputChange = {
+                bubbleAiBubbleLiquidGlassInput = it
+            },
+            bubbleAiBubbleWaterGlassInput = bubbleAiBubbleWaterGlassInput,
+            onBubbleAiBubbleWaterGlassInputChange = {
+                bubbleAiBubbleWaterGlassInput = it
             },
             cursorUserBubbleColorInput = cursorUserBubbleColorInput,
             bubbleUserBubbleColorInput = bubbleUserBubbleColorInput,
@@ -1722,20 +1896,150 @@ fun ThemeSettingsScreen() {
             bubbleImageRenderModeInput = bubbleImageRenderModeInput,
             onBubbleImageRenderModeInputChange = { bubbleImageRenderModeInput = it },
             bubbleUserRoundedCornersEnabledInput = bubbleUserRoundedCornersEnabledInput,
-            onBubbleUserRoundedCornersEnabledInputChange = { bubbleUserRoundedCornersEnabledInput = it },
+            onBubbleUserRoundedCornersEnabledInputChange = {
+                bubbleUserRoundedCornersEnabledInput = it
+            },
             bubbleAiRoundedCornersEnabledInput = bubbleAiRoundedCornersEnabledInput,
-            onBubbleAiRoundedCornersEnabledInputChange = { bubbleAiRoundedCornersEnabledInput = it },
+            onBubbleAiRoundedCornersEnabledInputChange = {
+                bubbleAiRoundedCornersEnabledInput = it
+            },
             bubbleUserContentPaddingLeftInput = bubbleUserContentPaddingLeftInput,
-            onBubbleUserContentPaddingLeftInputChange = { bubbleUserContentPaddingLeftInput = it },
+            onBubbleUserContentPaddingLeftInputChange = {
+                bubbleUserContentPaddingLeftInput = it
+            },
             bubbleUserContentPaddingRightInput = bubbleUserContentPaddingRightInput,
-            onBubbleUserContentPaddingRightInputChange = { bubbleUserContentPaddingRightInput = it },
+            onBubbleUserContentPaddingRightInputChange = {
+                bubbleUserContentPaddingRightInput = it
+            },
             bubbleAiContentPaddingLeftInput = bubbleAiContentPaddingLeftInput,
-            onBubbleAiContentPaddingLeftInputChange = { bubbleAiContentPaddingLeftInput = it },
+            onBubbleAiContentPaddingLeftInputChange = {
+                bubbleAiContentPaddingLeftInput = it
+            },
             bubbleAiContentPaddingRightInput = bubbleAiContentPaddingRightInput,
-            onBubbleAiContentPaddingRightInputChange = { bubbleAiContentPaddingRightInput = it },
+            onBubbleAiContentPaddingRightInputChange = {
+                bubbleAiContentPaddingRightInput = it
+            },
             saveThemeSettingsWithCharacterCard = ::saveThemeSettingsWithCharacterCard,
             preferencesManager = preferencesManager,
         )
+    }
+
+    @Composable
+    fun ThemeSettingsFooterContent() {
+        OutlinedButton(
+            onClick = {
+                scope.launch {
+                    resetThemeSettingsAndUi()
+                }
+            },
+            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+        ) {
+            Text(stringResource(id = R.string.theme_reset))
+        }
+
+        if (showSaveSuccessMessage) {
+            LaunchedEffect(key1 = showSaveSuccessMessage) {
+                kotlinx.coroutines.delay(2000)
+                showSaveSuccessMessage = false
+            }
+
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = stringResource(id = R.string.theme_saved),
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+
+        if (showColorPicker) {
+            ColorPickerDialog(
+                showColorPicker = showColorPicker,
+                currentColorPickerMode = currentColorPickerMode,
+                primaryColorInput = primaryColorInput,
+                secondaryColorInput = secondaryColorInput,
+                statusBarColorInput = customStatusBarColorInput,
+                appBarColorInput = customAppBarColorInput,
+                historyIconColorInput = chatHeaderHistoryIconColorInput,
+                pipIconColorInput = chatHeaderPipIconColorInput,
+                cursorUserBubbleColorInput = cursorUserBubbleColorInput,
+                bubbleUserBubbleColorInput = bubbleUserBubbleColorInput,
+                bubbleAiBubbleColorInput = bubbleAiBubbleColorInput,
+                bubbleUserTextColorInput = effectiveBubbleUserTextColorInput,
+                bubbleAiTextColorInput = effectiveBubbleAiTextColorInput,
+                recentColors = recentColors,
+                onColorSelected = ::handleThemeColorSelected,
+                onDismiss = { showColorPicker = false },
+            )
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(scrollState)) {
+        ThemeSettingsCharacterBindingInfoCard(
+            aiAvatarUri = activeThemeTargetAvatarUri ?: aiAvatarUri,
+            activeCharacterName = activeThemeTargetName,
+            isGroupTarget = isGroupThemeTarget,
+            cardColors = cardModifier,
+        )
+
+        ThemeSettingsThemeModeSection(
+            cardColors = cardModifier,
+            useSystemThemeInput = useSystemThemeInput,
+            onUseSystemThemeInputChange = { useSystemThemeInput = it },
+            themeModeInput = themeModeInput,
+            onThemeModeInputChange = { themeModeInput = it },
+            saveThemeSettingsWithCharacterCard = ::saveThemeSettingsWithCharacterCard,
+            preferencesManager = preferencesManager,
+        )
+
+        ThemeSettingsColorCustomizationSection(
+            cardColors = cardModifier,
+            preferencesManager = preferencesManager,
+            scope = scope,
+            saveThemeSettingsWithCharacterCard = ::saveThemeSettingsWithCharacterCard,
+            statusBarHiddenInput = statusBarHiddenInput,
+            onStatusBarHiddenInputChange = { statusBarHiddenInput = it },
+            statusBarTransparentInput = statusBarTransparentInput,
+            onStatusBarTransparentInputChange = { statusBarTransparentInput = it },
+            useCustomStatusBarColorInput = useCustomStatusBarColorInput,
+            onUseCustomStatusBarColorInputChange = { useCustomStatusBarColorInput = it },
+            customStatusBarColorInput = customStatusBarColorInput,
+            toolbarTransparentInput = toolbarTransparentInput,
+            onToolbarTransparentInputChange = { toolbarTransparentInput = it },
+            useCustomAppBarColorInput = useCustomAppBarColorInput,
+            onUseCustomAppBarColorInputChange = { useCustomAppBarColorInput = it },
+            customAppBarColorInput = customAppBarColorInput,
+            chatHeaderTransparentInput = chatHeaderTransparentInput,
+            onChatHeaderTransparentInputChange = { chatHeaderTransparentInput = it },
+            chatHeaderOverlayModeInput = chatHeaderOverlayModeInput,
+            onChatHeaderOverlayModeInputChange = { chatHeaderOverlayModeInput = it },
+            chatInputTransparentInput = chatInputTransparentInput,
+            onChatInputTransparentInputChange = { chatInputTransparentInput = it },
+            chatInputFloatingInput = chatInputFloatingInput,
+            onChatInputFloatingInputChange = { chatInputFloatingInput = it },
+            chatInputLiquidGlassInput = chatInputLiquidGlassInput,
+            onChatInputLiquidGlassInputChange = { chatInputLiquidGlassInput = it },
+            chatInputWaterGlassInput = chatInputWaterGlassInput,
+            onChatInputWaterGlassInputChange = { chatInputWaterGlassInput = it },
+            forceAppBarContentColorInput = forceAppBarContentColorInput,
+            onForceAppBarContentColorInputChange = { forceAppBarContentColorInput = it },
+            appBarContentColorModeInput = appBarContentColorModeInput,
+            onAppBarContentColorModeInputChange = { appBarContentColorModeInput = it },
+            chatHeaderHistoryIconColorInput = chatHeaderHistoryIconColorInput,
+            chatHeaderPipIconColorInput = chatHeaderPipIconColorInput,
+            useCustomColorsInput = useCustomColorsInput,
+            onUseCustomColorsInputChange = { useCustomColorsInput = it },
+            primaryColorInput = primaryColorInput,
+            secondaryColorInput = secondaryColorInput,
+            onColorModeInput = onColorModeInput,
+            onOnColorModeInputChange = { onColorModeInput = it },
+            onShowColorPicker = {
+                currentColorPickerMode = it
+                showColorPicker = true
+            },
+            onShowSaveSuccessMessage = { showSaveSuccessMessage = true },
+        )
+
+        ChatStyleSectionContent()
 
         ThemeSettingsAvatarSection(
             cardColors = cardModifier,
@@ -1821,276 +2125,7 @@ fun ThemeSettingsScreen() {
             onBackgroundBlurRadiusInputChange = { backgroundBlurRadiusInput = it },
         )
 
-        // Reset button
-        OutlinedButton(
-                onClick = {
-                    scope.launch {
-                        preferencesManager.resetThemeSettings()
-                        // 同时删除当前角色目标的主题配置
-                        if (isGroupThemeTarget) {
-                            activeCharacterGroup?.id?.let { preferencesManager.deleteCharacterGroupTheme(it) }
-                        } else {
-                            activeCharacterCard?.id?.let { preferencesManager.deleteCharacterCardTheme(it) }
-                        }
-                        // Reset local state after reset
-                        themeModeInput = UserPreferencesManager.THEME_MODE_LIGHT
-                        useSystemThemeInput = true
-                        primaryColorInput = defaultPrimaryColor
-                        secondaryColorInput = defaultSecondaryColor
-                        useCustomColorsInput = false
-                        useBackgroundImageInput = false
-                        backgroundImageUriInput = null
-                        backgroundImageOpacityInput = 0.3f
-                        backgroundMediaTypeInput = UserPreferencesManager.MEDIA_TYPE_IMAGE
-                        videoBackgroundMutedInput = true
-                        videoBackgroundLoopInput = true
-                        toolbarTransparentInput = false
-                        useCustomAppBarColorInput = false
-                        customAppBarColorInput = defaultPrimaryColor
-                        useCustomStatusBarColorInput = false
-                        customStatusBarColorInput = defaultPrimaryColor
-                        statusBarTransparentInput = false
-                        statusBarHiddenInput = false
-                        chatHeaderTransparentInput = false
-                        chatInputTransparentInput = false
-                        chatInputFloatingInput = false
-                        chatInputLiquidGlassInput = false
-                        chatInputWaterGlassInput = false
-                        chatHeaderOverlayModeInput = false
-                        forceAppBarContentColorInput = false
-                        appBarContentColorModeInput = UserPreferencesManager.APP_BAR_CONTENT_COLOR_MODE_LIGHT
-                        chatHeaderHistoryIconColorInput = Color.Gray.toArgb()
-                        chatHeaderPipIconColorInput = Color.Gray.toArgb()
-                        useBackgroundBlurInput = false
-                        backgroundBlurRadiusInput = 10f
-                        chatStyleInput = UserPreferencesManager.CHAT_STYLE_CURSOR
-                        inputStyleInput = UserPreferencesManager.INPUT_STYLE_AGENT
-                        bubbleShowAvatarInput = true
-                        bubbleWideLayoutEnabledInput = false
-                        cursorUserBubbleFollowThemeInput = true
-                        cursorUserBubbleLiquidGlassInput = false
-                        cursorUserBubbleWaterGlassInput = false
-                        bubbleUserBubbleLiquidGlassInput = false
-                        bubbleUserBubbleWaterGlassInput = false
-                        cursorUserBubbleColorInput = defaultCursorUserBubbleColor
-                        bubbleUserBubbleColorInput = defaultBubbleUserBubbleColor
-                        bubbleAiBubbleColorInput = defaultBubbleAiBubbleColor
-                        bubbleUserTextColorInput = defaultBubbleUserTextColor
-                        bubbleAiTextColorInput = defaultBubbleAiTextColor
-                        bubbleUserTextColorCustomizedInput = false
-                        bubbleAiTextColorCustomizedInput = false
-                        bubbleUserUseCustomFontInput = false
-                        bubbleUserFontTypeInput = UserPreferencesManager.FONT_TYPE_SYSTEM
-                        bubbleUserSystemFontNameInput = UserPreferencesManager.SYSTEM_FONT_DEFAULT
-                        bubbleUserCustomFontPathInput = null
-                        bubbleAiUseCustomFontInput = false
-                        bubbleAiFontTypeInput = UserPreferencesManager.FONT_TYPE_SYSTEM
-                        bubbleAiSystemFontNameInput = UserPreferencesManager.SYSTEM_FONT_DEFAULT
-                        bubbleAiCustomFontPathInput = null
-                        bubbleUserUseImageInput = false
-                        bubbleAiUseImageInput = false
-                        bubbleUserImageUriInput = null
-                        bubbleAiImageUriInput = null
-                        bubbleUserImageCropLeftInput = 0f
-                        bubbleUserImageCropTopInput = 0f
-                        bubbleUserImageCropRightInput = 0f
-                        bubbleUserImageCropBottomInput = 0f
-                        bubbleUserImageRepeatStartInput = 0.35f
-                        bubbleUserImageRepeatEndInput = 0.65f
-                        bubbleUserImageRepeatYStartInput = 0.35f
-                        bubbleUserImageRepeatYEndInput = 0.65f
-                        bubbleUserImageScaleInput = 1f
-                        bubbleAiImageCropLeftInput = 0f
-                        bubbleAiImageCropTopInput = 0f
-                        bubbleAiImageCropRightInput = 0f
-                        bubbleAiImageCropBottomInput = 0f
-                        bubbleAiImageRepeatStartInput = 0.35f
-                        bubbleAiImageRepeatEndInput = 0.65f
-                        bubbleAiImageRepeatYStartInput = 0.35f
-                        bubbleAiImageRepeatYEndInput = 0.65f
-                        bubbleAiImageScaleInput = 1f
-                        bubbleImageRenderModeInput =
-                            UserPreferencesManager.BUBBLE_IMAGE_RENDER_MODE_TILED_NINE_SLICE
-                        bubbleUserRoundedCornersEnabledInput = true
-                        bubbleAiRoundedCornersEnabledInput = true
-                        bubbleUserContentPaddingLeftInput = 12f
-                        bubbleUserContentPaddingRightInput = 12f
-                        bubbleAiContentPaddingLeftInput = 12f
-                        bubbleAiContentPaddingRightInput = 12f
-                        showThinkingProcessInput = true
-                        showStatusTagsInput = true
-                        showInputProcessingStatusInput = true
-                        showChatFloatingDotsAnimationInput = true
-                        userAvatarUriInput = null
-                        aiAvatarUriInput = null
-                        avatarShapeInput = UserPreferencesManager.AVATAR_SHAPE_CIRCLE
-                        avatarCornerRadiusInput = 8f
-                        onColorModeInput = UserPreferencesManager.ON_COLOR_MODE_AUTO
-                        showSaveSuccessMessage = true
-                        globalUserAvatarUriInput = null
-                        globalUserNameInput = null
-                        useCustomFontInput = false
-                        fontTypeInput = UserPreferencesManager.FONT_TYPE_SYSTEM
-                        systemFontNameInput = UserPreferencesManager.SYSTEM_FONT_DEFAULT
-                        customFontPathInput = null
-                        fontScaleInput = 1.0f
-                    }
-                },
-                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)
-        ) { Text(stringResource(id = R.string.theme_reset)) }
-
-        // Show save success message
-        if (showSaveSuccessMessage) {
-            LaunchedEffect(key1 = showSaveSuccessMessage) {
-                kotlinx.coroutines.delay(2000)
-                showSaveSuccessMessage = false
-            }
-
-            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Text(
-                        text = stringResource(id = R.string.theme_saved),
-                        color = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
-
-        // Color picker dialog
-        if (showColorPicker) {
-            ColorPickerDialog(
-                    showColorPicker = showColorPicker,
-                    currentColorPickerMode = currentColorPickerMode,
-                    primaryColorInput = primaryColorInput,
-                    secondaryColorInput = secondaryColorInput,
-                    statusBarColorInput = customStatusBarColorInput,
-                    appBarColorInput = customAppBarColorInput,
-                    historyIconColorInput = chatHeaderHistoryIconColorInput,
-                    pipIconColorInput = chatHeaderPipIconColorInput,
-                    cursorUserBubbleColorInput = cursorUserBubbleColorInput,
-                    bubbleUserBubbleColorInput = bubbleUserBubbleColorInput,
-                    bubbleAiBubbleColorInput = bubbleAiBubbleColorInput,
-                    bubbleUserTextColorInput = effectiveBubbleUserTextColorInput,
-                    bubbleAiTextColorInput = effectiveBubbleAiTextColorInput,
-                    recentColors = recentColors,
-                    onColorSelected = {
-                        primaryColor,
-                        secondaryColor,
-                        statusBarColor,
-                        appBarColor,
-                        historyIconColor,
-                        pipIconColor,
-                        cursorUserBubbleColor,
-                        bubbleUserBubbleColor,
-                        bubbleAiBubbleColor,
-                        bubbleUserTextColor,
-                        bubbleAiTextColor ->
-                        primaryColor?.let { primaryColorInput = it }
-                        secondaryColor?.let { secondaryColorInput = it }
-                        statusBarColor?.let { customStatusBarColorInput = it }
-                        appBarColor?.let { customAppBarColorInput = it }
-                        historyIconColor?.let { chatHeaderHistoryIconColorInput = it }
-                        pipIconColor?.let { chatHeaderPipIconColorInput = it }
-                        cursorUserBubbleColor?.let { cursorUserBubbleColorInput = it }
-                        bubbleUserBubbleColor?.let { bubbleUserBubbleColorInput = it }
-                        bubbleAiBubbleColor?.let { bubbleAiBubbleColorInput = it }
-                        bubbleUserTextColor?.let {
-                            bubbleUserTextColorInput = it
-                            bubbleUserTextColorCustomizedInput = true
-                        }
-                        bubbleAiTextColor?.let {
-                            bubbleAiTextColorInput = it
-                            bubbleAiTextColorCustomizedInput = true
-                        }
-
-                        // Save the new color to recent colors
-                        val newColor =
-                                primaryColor
-                                        ?: secondaryColor
-                                        ?: statusBarColor
-                                        ?: appBarColor
-                                        ?: historyIconColor
-                                        ?: pipIconColor
-                                        ?: cursorUserBubbleColor
-                                        ?: bubbleUserBubbleColor
-                                        ?: bubbleAiBubbleColor
-                                        ?: bubbleUserTextColor
-                                        ?: bubbleAiTextColor
-                        newColor?.let { scope.launch { preferencesManager.addRecentColor(it) } }
-
-                        // Save the colors
-                        saveThemeSettingsWithCharacterCard {
-                            when (currentColorPickerMode) {
-                                "primary" ->
-                                        primaryColor?.let {
-                                            preferencesManager.saveThemeSettings(
-                                                    customPrimaryColor = it
-                                            )
-                                        }
-                                "secondary" ->
-                                        secondaryColor?.let {
-                                            preferencesManager.saveThemeSettings(
-                                                    customSecondaryColor = it
-                                            )
-                                        }
-                                "statusBar" ->
-                                        statusBarColor?.let {
-                                            preferencesManager.saveThemeSettings(
-                                                    customStatusBarColor = it
-                                            )
-                                        }
-                                "appBar" ->
-                                        appBarColor?.let {
-                                            preferencesManager.saveThemeSettings(
-                                                    customAppBarColor = it
-                                            )
-                                        }
-                                "historyIcon" ->
-                                        historyIconColor?.let {
-                                            preferencesManager.saveThemeSettings(
-                                                    chatHeaderHistoryIconColor = it
-                                            )
-                                        }
-                                "pipIcon" ->
-                                        pipIconColor?.let {
-                                            preferencesManager.saveThemeSettings(
-                                                    chatHeaderPipIconColor = it
-                                            )
-                                        }
-                                "cursorUserBubble" ->
-                                        cursorUserBubbleColor?.let {
-                                            preferencesManager.saveThemeSettings(
-                                                cursorUserBubbleColor = it,
-                                            )
-                                        }
-                                "bubbleUserBubble" ->
-                                        bubbleUserBubbleColor?.let {
-                                            preferencesManager.saveThemeSettings(
-                                                bubbleUserBubbleColor = it,
-                                            )
-                                        }
-                                "bubbleAiBubble" ->
-                                        bubbleAiBubbleColor?.let {
-                                            preferencesManager.saveThemeSettings(
-                                                bubbleAiBubbleColor = it,
-                                            )
-                                        }
-                                "bubbleUserText" ->
-                                        bubbleUserTextColor?.let {
-                                            preferencesManager.saveThemeSettings(
-                                                bubbleUserTextColor = it,
-                                            )
-                                        }
-                                "bubbleAiText" ->
-                                        bubbleAiTextColor?.let {
-                                            preferencesManager.saveThemeSettings(
-                                                bubbleAiTextColor = it,
-                                            )
-                                        }
-                            }
-                        }
-                    },
-                    onDismiss = { showColorPicker = false }
-            )
-        }
+        ThemeSettingsFooterContent()
 
 
     }

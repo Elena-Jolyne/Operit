@@ -228,6 +228,12 @@ class MessageCoordinationDelegate(
                 newWindowSize
             )
         }
+        AppLogger.d(
+            TAG,
+            "上下文窗口已刷新: chatId=$targetChatId, window=$newWindowSize, " +
+                "input=$inputTokens, output=$outputTokens, service=${service.javaClass.simpleName}, " +
+                "promptType=$effectivePromptFunctionType"
+        )
         return newWindowSize
     }
 

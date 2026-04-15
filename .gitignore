@@ -58,3 +58,4 @@ operit-pc-agent.zip
 
 # generated toolpkg bundles
 *.toolpkg
+.venv

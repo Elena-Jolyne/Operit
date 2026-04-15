@@ -145,6 +145,10 @@ class UserPreferencesManager private constructor(private val context: Context) {
             booleanPreferencesKey("bubble_user_bubble_liquid_glass")
         private val BUBBLE_USER_BUBBLE_WATER_GLASS =
             booleanPreferencesKey("bubble_user_bubble_water_glass")
+        private val BUBBLE_AI_BUBBLE_LIQUID_GLASS =
+            booleanPreferencesKey("bubble_ai_bubble_liquid_glass")
+        private val BUBBLE_AI_BUBBLE_WATER_GLASS =
+            booleanPreferencesKey("bubble_ai_bubble_water_glass")
         private val BUBBLE_USER_BUBBLE_COLOR = intPreferencesKey("bubble_user_bubble_color")
         private val BUBBLE_AI_BUBBLE_COLOR = intPreferencesKey("bubble_ai_bubble_color")
         private val BUBBLE_USER_TEXT_COLOR = intPreferencesKey("bubble_user_text_color")
@@ -559,6 +563,16 @@ class UserPreferencesManager private constructor(private val context: Context) {
     val bubbleUserBubbleColor: Flow<Int?> =
         context.userPreferencesDataStore.data.map { preferences ->
             preferences[BUBBLE_USER_BUBBLE_COLOR]
+        }
+
+    val bubbleAiBubbleLiquidGlass: Flow<Boolean> =
+        context.userPreferencesDataStore.data.map { preferences ->
+            preferences[BUBBLE_AI_BUBBLE_LIQUID_GLASS] ?: false
+        }
+
+    val bubbleAiBubbleWaterGlass: Flow<Boolean> =
+        context.userPreferencesDataStore.data.map { preferences ->
+            preferences[BUBBLE_AI_BUBBLE_WATER_GLASS] ?: false
         }
 
     val bubbleAiBubbleColor: Flow<Int?> =
@@ -1047,6 +1061,8 @@ class UserPreferencesManager private constructor(private val context: Context) {
             bubbleUserBubbleLiquidGlass: Boolean? = null,
             bubbleUserBubbleWaterGlass: Boolean? = null,
             bubbleUserBubbleColor: Int? = null,
+            bubbleAiBubbleLiquidGlass: Boolean? = null,
+            bubbleAiBubbleWaterGlass: Boolean? = null,
             bubbleAiBubbleColor: Int? = null,
             bubbleUserTextColor: Int? = null,
             bubbleAiTextColor: Int? = null,
@@ -1181,6 +1197,20 @@ class UserPreferencesManager private constructor(private val context: Context) {
                 }
             }
             bubbleUserBubbleColor?.let { preferences[BUBBLE_USER_BUBBLE_COLOR] = it }
+            bubbleAiBubbleLiquidGlass?.let {
+                preferences[BUBBLE_AI_BUBBLE_LIQUID_GLASS] = it
+                if (it) {
+                    preferences[BUBBLE_AI_BUBBLE_WATER_GLASS] = false
+                    preferences[BUBBLE_AI_USE_IMAGE] = false
+                }
+            }
+            bubbleAiBubbleWaterGlass?.let {
+                preferences[BUBBLE_AI_BUBBLE_WATER_GLASS] = it
+                if (it) {
+                    preferences[BUBBLE_AI_BUBBLE_LIQUID_GLASS] = false
+                    preferences[BUBBLE_AI_USE_IMAGE] = false
+                }
+            }
             bubbleAiBubbleColor?.let { preferences[BUBBLE_AI_BUBBLE_COLOR] = it }
             bubbleUserTextColor?.let { preferences[BUBBLE_USER_TEXT_COLOR] = it }
             bubbleAiTextColor?.let { preferences[BUBBLE_AI_TEXT_COLOR] = it }
@@ -1283,6 +1313,8 @@ class UserPreferencesManager private constructor(private val context: Context) {
             preferences.remove(BUBBLE_USER_BUBBLE_LIQUID_GLASS)
             preferences.remove(BUBBLE_USER_BUBBLE_WATER_GLASS)
             preferences.remove(BUBBLE_USER_BUBBLE_COLOR)
+            preferences.remove(BUBBLE_AI_BUBBLE_LIQUID_GLASS)
+            preferences.remove(BUBBLE_AI_BUBBLE_WATER_GLASS)
             preferences.remove(BUBBLE_AI_BUBBLE_COLOR)
             preferences.remove(BUBBLE_USER_TEXT_COLOR)
             preferences.remove(BUBBLE_AI_TEXT_COLOR)
@@ -1604,7 +1636,8 @@ class UserPreferencesManager private constructor(private val context: Context) {
             CHAT_INPUT_WATER_GLASS,
             FORCE_APP_BAR_CONTENT_COLOR_ENABLED, CHAT_HEADER_OVERLAY_MODE, USE_BACKGROUND_BLUR,
             BUBBLE_SHOW_AVATAR, BUBBLE_WIDE_LAYOUT_ENABLED, CURSOR_USER_BUBBLE_FOLLOW_THEME, CURSOR_USER_BUBBLE_LIQUID_GLASS,
-            CURSOR_USER_BUBBLE_WATER_GLASS, BUBBLE_USER_USE_IMAGE,
+            CURSOR_USER_BUBBLE_WATER_GLASS, BUBBLE_USER_BUBBLE_LIQUID_GLASS, BUBBLE_USER_BUBBLE_WATER_GLASS,
+            BUBBLE_AI_BUBBLE_LIQUID_GLASS, BUBBLE_AI_BUBBLE_WATER_GLASS, BUBBLE_USER_USE_IMAGE,
             BUBBLE_AI_USE_IMAGE, BUBBLE_USER_ROUNDED_CORNERS_ENABLED, BUBBLE_AI_ROUNDED_CORNERS_ENABLED, KEY_SHOW_THINKING_PROCESS, KEY_SHOW_STATUS_TAGS,
             KEY_SHOW_INPUT_PROCESSING_STATUS, KEY_SHOW_CHAT_FLOATING_DOTS_ANIMATION, USE_CUSTOM_FONT,
             BUBBLE_USER_USE_CUSTOM_FONT, BUBBLE_AI_USE_CUSTOM_FONT

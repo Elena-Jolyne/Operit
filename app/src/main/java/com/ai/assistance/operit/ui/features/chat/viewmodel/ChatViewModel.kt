@@ -77,12 +77,12 @@ import com.ai.assistance.operit.services.core.TokenStatisticsDelegate
 import com.ai.assistance.operit.services.core.AttachmentDelegate
 import com.ai.assistance.operit.services.core.MessageCoordinationDelegate
 import com.ai.assistance.operit.data.model.InputProcessingState
+import com.ai.assistance.operit.data.model.WorkspaceRenameResult
 import com.ai.assistance.operit.services.ChatServiceCore
 import com.ai.assistance.operit.services.ChatServiceUiBridge
 import com.ai.assistance.operit.services.EmptyChatServiceUiBridge
 import com.ai.assistance.operit.ui.features.chat.util.MessageImageGenerator
 import com.ai.assistance.operit.ui.features.chat.components.CharacterSelectorTarget
-
 enum class ChatHistoryDisplayMode {
     BY_CHARACTER_CARD,
     BY_FOLDER,
@@ -1968,6 +1968,33 @@ class ChatViewModel(private val context: Context) : ViewModel() {
                 )
             }
         }
+    }
+
+    suspend fun renameWorkspace(
+        chatId: String,
+        newWorkspaceName: String
+    ): WorkspaceRenameResult {
+        val result = chatHistoryDelegate.renameWorkspaceAndChat(chatId, newWorkspaceName)
+        runCatching {
+            if (prepareWorkspaceServer(result.workspacePath, result.workspaceEnv)) {
+                AppLogger.d(
+                    TAG,
+                    "Web server workspace renamed to: ${result.workspacePath} env=${result.workspaceEnv} for chat $chatId"
+                )
+            } else {
+                AppLogger.d(
+                    TAG,
+                    "Workspace server disabled by config after rename: ${result.workspacePath} env=${result.workspaceEnv}"
+                )
+            }
+            refreshWebView()
+        }.onFailure { e ->
+            AppLogger.e(TAG, "Failed to refresh workspace after rename", e)
+            uiStateDelegate.showErrorMessage(
+                context.getString(R.string.chat_update_workspace_server_failed, e.message ?: "")
+            )
+        }
+        return result
     }
 
     /** 在工作区中执行命令（来自 config.json 按钮） */

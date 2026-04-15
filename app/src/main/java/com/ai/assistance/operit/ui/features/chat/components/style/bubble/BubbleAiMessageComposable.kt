@@ -54,7 +54,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.ai.assistance.operit.util.markdown.MarkdownProcessorType
 import com.ai.assistance.operit.ui.theme.ProvideAiMarkdownTextLayoutSettings
 import com.ai.assistance.operit.ui.theme.applyFontFamilyToTypography
+import com.ai.assistance.operit.ui.theme.isLiquidGlassSupported
+import com.ai.assistance.operit.ui.theme.isWaterGlassSupported
+import com.ai.assistance.operit.ui.theme.liquidGlass
 import com.ai.assistance.operit.ui.theme.resolveConfiguredFontFamily
+import com.ai.assistance.operit.ui.theme.waterGlass
 import kotlinx.coroutines.runBlocking
 
 private val ExpandedBubbleLayoutNodeTypes =
@@ -73,6 +77,8 @@ fun BubbleAiMessageComposable(
     message: ChatMessage,
     backgroundColor: Color,
     textColor: Color,
+    enableLiquidGlass: Boolean = false,
+    enableWaterGlass: Boolean = false,
     bubbleImageStyle: BubbleImageStyleConfig? = null,
     bubbleRoundedCornersEnabled: Boolean = true,
     bubbleContentPaddingLeft: Float = 12f,
@@ -239,6 +245,15 @@ fun BubbleAiMessageComposable(
                     ),
             )
         }
+    val waterGlassEnabled = enableWaterGlass && isWaterGlassSupported()
+    val liquidGlassEnabled =
+        !waterGlassEnabled && enableLiquidGlass && isLiquidGlassSupported()
+    val effectiveBubbleImageStyle =
+        if (liquidGlassEnabled || waterGlassEnabled) {
+            null
+        } else {
+            bubbleImageStyle
+        }
 
     MaterialTheme(typography = bubbleTypography) {
         ProvideAiMarkdownTextLayoutSettings {
@@ -391,9 +406,9 @@ fun BubbleAiMessageComposable(
                         }
                     }
 
-                    if (bubbleImageStyle != null) {
+                    if (effectiveBubbleImageStyle != null) {
                         BubbleImageBackgroundSurface(
-                            imageStyle = bubbleImageStyle,
+                            imageStyle = effectiveBubbleImageStyle,
                             shape = bubbleShape,
                             modifier = bubbleModifier,
                             contentPadding = PaddingValues(0.dp),
@@ -402,10 +417,39 @@ fun BubbleAiMessageComposable(
                         }
                     } else {
                         Surface(
-                            modifier = bubbleModifier,
+                            modifier =
+                                bubbleModifier
+                                    .waterGlass(
+                                        enabled = waterGlassEnabled,
+                                        shape = bubbleShape,
+                                        containerColor = backgroundColor,
+                                        shadowElevation = 10.dp,
+                                        borderWidth = 0.7.dp,
+                                        overlayAlphaBoost = 0.08f,
+                                    )
+                                    .liquidGlass(
+                                        enabled = liquidGlassEnabled,
+                                        shape = bubbleShape,
+                                        containerColor = backgroundColor,
+                                        shadowElevation = 10.dp,
+                                        borderWidth = 0.28.dp,
+                                        blurRadius = 28.dp,
+                                        overlayAlphaBoost = 0.10f,
+                                        enableLens = false,
+                                    ),
                             shape = bubbleShape,
-                            color = backgroundColor,
-                            tonalElevation = 2.dp,
+                            color =
+                                if (liquidGlassEnabled || waterGlassEnabled) {
+                                    Color.Transparent
+                                } else {
+                                    backgroundColor
+                                },
+                            tonalElevation =
+                                if (liquidGlassEnabled || waterGlassEnabled) {
+                                    0.dp
+                                } else {
+                                    2.dp
+                                },
                         ) {
                             renderContent()
                         }
@@ -571,9 +615,9 @@ fun BubbleAiMessageComposable(
                         }
                     }
 
-                    if (bubbleImageStyle != null) {
+                    if (effectiveBubbleImageStyle != null) {
                         BubbleImageBackgroundSurface(
-                            imageStyle = bubbleImageStyle,
+                            imageStyle = effectiveBubbleImageStyle,
                             shape = bubbleShape,
                             modifier = bubbleModifier,
                             contentPadding = PaddingValues(0.dp),
@@ -582,10 +626,39 @@ fun BubbleAiMessageComposable(
                         }
                     } else {
                         Surface(
-                            modifier = bubbleModifier,
+                            modifier =
+                                bubbleModifier
+                                    .waterGlass(
+                                        enabled = waterGlassEnabled,
+                                        shape = bubbleShape,
+                                        containerColor = backgroundColor,
+                                        shadowElevation = 10.dp,
+                                        borderWidth = 0.7.dp,
+                                        overlayAlphaBoost = 0.08f,
+                                    )
+                                    .liquidGlass(
+                                        enabled = liquidGlassEnabled,
+                                        shape = bubbleShape,
+                                        containerColor = backgroundColor,
+                                        shadowElevation = 10.dp,
+                                        borderWidth = 0.28.dp,
+                                        blurRadius = 28.dp,
+                                        overlayAlphaBoost = 0.10f,
+                                        enableLens = false,
+                                    ),
                             shape = bubbleShape,
-                            color = backgroundColor,
-                            tonalElevation = 2.dp
+                            color =
+                                if (liquidGlassEnabled || waterGlassEnabled) {
+                                    Color.Transparent
+                                } else {
+                                    backgroundColor
+                                },
+                            tonalElevation =
+                                if (liquidGlassEnabled || waterGlassEnabled) {
+                                    0.dp
+                                } else {
+                                    2.dp
+                                }
                         ) {
                             renderContent()
                         }

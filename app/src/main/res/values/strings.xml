@@ -3522,6 +3522,10 @@
     <string name="chat_style_bubble_user_bubble_liquid_glass_desc">开启后，气泡式用户消息背景会显示 iOS 风格磨砂玻璃效果</string>
     <string name="chat_style_bubble_user_bubble_water_glass">气泡式用户消息水玻璃背景</string>
     <string name="chat_style_bubble_user_bubble_water_glass_desc">开启后，气泡式用户消息背景会显示水玻璃效果</string>
+    <string name="chat_style_bubble_ai_bubble_liquid_glass">气泡式AI消息磨砂玻璃背景</string>
+    <string name="chat_style_bubble_ai_bubble_liquid_glass_desc">开启后，气泡式AI消息背景会显示 iOS 风格磨砂玻璃效果</string>
+    <string name="chat_style_bubble_ai_bubble_water_glass">气泡式AI消息水玻璃背景</string>
+    <string name="chat_style_bubble_ai_bubble_water_glass_desc">开启后，气泡式AI消息背景会显示水玻璃效果</string>
     <string name="chat_style_cursor_user_bubble_color">命令式用户消息框</string>
     <string name="chat_style_bubble_color_title">对话式气泡颜色</string>
     <string name="chat_style_bubble_user_color">用户气泡</string>
@@ -3534,6 +3538,8 @@
     <string name="chat_style_bubble_user_image_title">用户气泡图片</string>
     <string name="chat_style_bubble_ai_image_title">AI气泡图片</string>
     <string name="chat_style_bubble_image_desc">启用后使用图片气泡，并支持裁剪与中段重复拉伸</string>
+    <string name="chat_style_bubble_user_image_disabled_by_glass">当前已开启用户气泡磨砂玻璃或水玻璃背景，用户气泡图片不会生效</string>
+    <string name="chat_style_bubble_ai_image_disabled_by_glass">当前已开启AI气泡磨砂玻璃或水玻璃背景，AI气泡图片不会生效</string>
     <string name="chat_style_bubble_pick_image">选择图片</string>
     <string name="chat_style_bubble_clear_image">清空图片</string>
     <string name="chat_style_bubble_no_image_selected">未选择图片</string>
