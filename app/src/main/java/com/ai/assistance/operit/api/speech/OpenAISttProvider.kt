@@ -133,6 +133,7 @@ class OpenAISttProvider(
         languageCode: String,
         continuousMode: Boolean,
         partialResults: Boolean,
+        audioSource: Int,
     ): Boolean {
         if (!isInitialized.value) {
             val ok = initialize()
@@ -155,7 +156,7 @@ class OpenAISttProvider(
                 }
 
                 val record = AudioRecord(
-                    MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+                    audioSource,
                     SAMPLE_RATE,
                     CHANNEL_CONFIG,
                     AUDIO_FORMAT,

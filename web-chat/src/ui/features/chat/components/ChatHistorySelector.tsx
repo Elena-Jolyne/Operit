@@ -1,4 +1,3 @@
-import type { PointerEvent as ReactPointerEvent } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AddCircleIcon,
@@ -25,6 +24,10 @@ type HistoryDisplayMode = 'BY_CHARACTER_CARD' | 'BY_FOLDER' | 'CURRENT_CHARACTER
 
 const HISTORY_DISPLAY_MODE_KEY = 'web_chat_history_display_mode';
 const HISTORY_SHOW_SWIPE_HINT_KEY = 'web_chat_show_swipe_hint';
+const LONG_PRESS_DURATION_MS = 420;
+const SWIPE_LOCK_DISTANCE_PX = 10;
+const SWIPE_ACTION_TRIGGER_PX = 100;
+const SWIPE_ACTION_MAX_PX = 116;
 
 function readStoredHistoryDisplayMode(): HistoryDisplayMode {
   if (typeof window === 'undefined') {
@@ -142,6 +145,244 @@ function buildGroupBuckets(chats: WebChatSummary[]) {
   return [...buckets.values()];
 }
 
+function clampSwipeOffset(offset: number) {
+  return Math.max(-SWIPE_ACTION_MAX_PX, Math.min(SWIPE_ACTION_MAX_PX, offset));
+}
+
+function SwipeableHistoryChatRow({
+  chat,
+  nested = false,
+  active,
+  parentChat,
+  onDismissSwipeHint,
+  onLongPress,
+  onSelect,
+  onRename,
+  onDelete
+}: {
+  chat: WebChatSummary;
+  nested?: boolean;
+  active: boolean;
+  parentChat: WebChatSummary | null;
+  onDismissSwipeHint: () => void;
+  onLongPress: (chat: WebChatSummary) => void;
+  onSelect: (chatId: string) => void;
+  onRename: (chat: WebChatSummary) => void;
+  onDelete: (chat: WebChatSummary) => void;
+}) {
+  const [offsetX, setOffsetX] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const pointerIdRef = useRef<number | null>(null);
+  const startXRef = useRef(0);
+  const startYRef = useRef(0);
+  const gestureAxisRef = useRef<'horizontal' | 'vertical' | null>(null);
+  const ignoreClickRef = useRef(false);
+  const longPressTriggeredRef = useRef(false);
+  const longPressTimerRef = useRef<number | null>(null);
+  const currentOffsetRef = useRef(0);
+
+  useEffect(() => {
+    return () => {
+      if (longPressTimerRef.current !== null) {
+        window.clearTimeout(longPressTimerRef.current);
+      }
+    };
+  }, []);
+
+  function clearLongPress() {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }
+
+  function resetSwipe() {
+    currentOffsetRef.current = 0;
+    setOffsetX(0);
+    setIsDragging(false);
+  }
+
+  function finalizeGesture(target?: EventTarget | null) {
+    clearLongPress();
+
+    const gestureAxis = gestureAxisRef.current;
+    const committedOffset = currentOffsetRef.current;
+    const longPressTriggered = longPressTriggeredRef.current;
+
+    if (
+      target instanceof Element &&
+      pointerIdRef.current !== null &&
+      target.hasPointerCapture(pointerIdRef.current)
+    ) {
+      target.releasePointerCapture(pointerIdRef.current);
+    }
+
+    pointerIdRef.current = null;
+    gestureAxisRef.current = null;
+
+    if (longPressTriggered) {
+      longPressTriggeredRef.current = false;
+      resetSwipe();
+      return;
+    }
+
+    if (gestureAxis === 'horizontal') {
+      ignoreClickRef.current = true;
+      resetSwipe();
+      if (committedOffset >= SWIPE_ACTION_TRIGGER_PX) {
+        onRename(chat);
+      } else if (committedOffset <= -SWIPE_ACTION_TRIGGER_PX) {
+        onDelete(chat);
+      }
+      return;
+    }
+
+    resetSwipe();
+  }
+
+  const swipeStartProgress = Math.max(0, offsetX) / SWIPE_ACTION_MAX_PX;
+  const swipeEndProgress = Math.max(0, -offsetX) / SWIPE_ACTION_MAX_PX;
+
+  return (
+    <div
+      className={[
+        'chat-history-selector-chat-row',
+        active ? 'is-active' : '',
+        nested ? 'is-nested' : ''
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      key={chat.id}
+    >
+      {nested ? <NestedHistoryGutter kind="chat" /> : null}
+      <div className="chat-history-selector-swipe-shell">
+        <div className="chat-history-selector-swipe-track">
+          <div aria-hidden="true" className="chat-history-selector-swipe-actions">
+            <div
+              className="chat-history-selector-swipe-action is-start"
+              style={{ opacity: swipeStartProgress, transform: `scale(${0.9 + swipeStartProgress * 0.1})` }}
+            >
+              <span className="chat-history-selector-swipe-action-icon">
+                <PencilIcon size={20} />
+              </span>
+            </div>
+            <div
+              className="chat-history-selector-swipe-action is-end"
+              style={{ opacity: swipeEndProgress, transform: `scale(${0.9 + swipeEndProgress * 0.1})` }}
+            >
+              <span className="chat-history-selector-swipe-action-icon">
+                <TrashIcon size={20} />
+              </span>
+            </div>
+          </div>
+
+          <button
+            className={`chat-history-selector-chat-surface ${isDragging ? 'is-dragging' : ''}`}
+            onClick={() => {
+              if (ignoreClickRef.current) {
+                ignoreClickRef.current = false;
+                return;
+              }
+              onSelect(chat.id);
+            }}
+            onContextMenu={(event) => {
+              event.preventDefault();
+            }}
+            onPointerCancel={(event) => {
+              ignoreClickRef.current = true;
+              finalizeGesture(event.currentTarget);
+            }}
+            onPointerDown={(event) => {
+              if (event.button !== 0) {
+                return;
+              }
+
+              pointerIdRef.current = event.pointerId;
+              startXRef.current = event.clientX;
+              startYRef.current = event.clientY;
+              gestureAxisRef.current = null;
+              ignoreClickRef.current = false;
+              longPressTriggeredRef.current = false;
+              resetSwipe();
+              clearLongPress();
+
+              longPressTimerRef.current = window.setTimeout(() => {
+                longPressTriggeredRef.current = true;
+                ignoreClickRef.current = true;
+                resetSwipe();
+                onLongPress(chat);
+              }, LONG_PRESS_DURATION_MS);
+            }}
+            onPointerLeave={() => {
+              if (gestureAxisRef.current !== 'horizontal') {
+                clearLongPress();
+              }
+            }}
+            onPointerMove={(event) => {
+              if (pointerIdRef.current !== event.pointerId || longPressTriggeredRef.current) {
+                return;
+              }
+
+              const deltaX = event.clientX - startXRef.current;
+              const deltaY = event.clientY - startYRef.current;
+
+              if (gestureAxisRef.current === null) {
+                if (
+                  Math.abs(deltaX) < SWIPE_LOCK_DISTANCE_PX &&
+                  Math.abs(deltaY) < SWIPE_LOCK_DISTANCE_PX
+                ) {
+                  return;
+                }
+
+                clearLongPress();
+
+                if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                  gestureAxisRef.current = 'horizontal';
+                  ignoreClickRef.current = true;
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                } else {
+                  gestureAxisRef.current = 'vertical';
+                  return;
+                }
+              }
+
+              if (gestureAxisRef.current !== 'horizontal') {
+                return;
+              }
+
+              event.preventDefault();
+              onDismissSwipeHint();
+
+              const nextOffset = clampSwipeOffset(deltaX);
+              currentOffsetRef.current = nextOffset;
+              setOffsetX(nextOffset);
+              setIsDragging(true);
+            }}
+            onPointerUp={(event) => finalizeGesture(event.currentTarget)}
+            style={{ transform: `translateX(${offsetX}px)` }}
+            type="button"
+          >
+            <div className="chat-history-selector-chat-title-row">
+              <div className="chat-history-selector-chat-title-block">
+                <strong>{chat.title}</strong>
+                {chat.active_streaming ? <span className="chat-history-selector-streaming-dot" /> : null}
+              </div>
+              {chat.locked ? <LockIcon size={16} /> : null}
+            </div>
+
+            {parentChat ? (
+              <div className="chat-history-selector-parent-line">
+                <BranchIcon size={14} />
+                <span>{parentChat.title}</span>
+              </div>
+            ) : null}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ChatHistorySelector({
   open,
   chats,
@@ -163,9 +404,9 @@ export function ChatHistorySelector({
   busy: boolean;
   streaming: boolean;
   onClose: () => void;
-  onCreateChat: (options?: { group?: string | null }) => void;
-  onRenameChat: (chat: WebChatSummary, title: string) => void;
-  onDeleteChat: (chat: WebChatSummary) => void;
+  onCreateChat: (options?: { group?: string | null }) => Promise<void>;
+  onRenameChat: (chat: WebChatSummary, title: string) => Promise<void>;
+  onDeleteChat: (chat: WebChatSummary) => Promise<void>;
   onSearchChange: (value: string) => void;
   onSelectChat: (chatId: string) => void;
 }) {
@@ -183,9 +424,6 @@ export function ChatHistorySelector({
   );
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [collapsedCharacters, setCollapsedCharacters] = useState<Set<string>>(new Set());
-  const longPressTimerRef = useRef<number | null>(null);
-  const longPressTriggeredRef = useRef(false);
-
   useEffect(() => {
     if (!open) {
       setEditingChat(null);
@@ -290,40 +528,6 @@ export function ChatHistorySelector({
     return buildGroupBuckets(visibleChats);
   }, [historyDisplayMode, visibleChats]);
 
-  function clearLongPress() {
-    if (longPressTimerRef.current !== null) {
-      window.clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-  }
-
-  function bindLongPress(chat: WebChatSummary) {
-    return {
-      onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => {
-        if (event.button !== 0) {
-          return;
-        }
-        longPressTriggeredRef.current = false;
-        clearLongPress();
-        longPressTimerRef.current = window.setTimeout(() => {
-          longPressTriggeredRef.current = true;
-          setActionTarget(chat);
-        }, 420);
-      },
-      onPointerUp: () => clearLongPress(),
-      onPointerLeave: () => clearLongPress(),
-      onPointerCancel: () => clearLongPress(),
-      onClick: () => {
-        clearLongPress();
-        if (longPressTriggeredRef.current) {
-          longPressTriggeredRef.current = false;
-          return;
-        }
-        onSelectChat(chat.id);
-      }
-    };
-  }
-
   function toggleCollapsedGroup(key: string) {
     setCollapsedGroups((current) => {
       const next = new Set(current);
@@ -354,6 +558,9 @@ export function ChatHistorySelector({
   }
 
   function dismissSwipeHint() {
+    if (!showSwipeHint) {
+      return;
+    }
     setShowSwipeHint(false);
     writeStoredValue(HISTORY_SHOW_SWIPE_HINT_KEY, 'false');
   }
@@ -361,40 +568,21 @@ export function ChatHistorySelector({
   function renderChatItem(chat: WebChatSummary, nested = false) {
     const parentChat = chat.parent_chat_id ? chatsById.get(chat.parent_chat_id) : null;
     return (
-      <div
-        className={[
-          'chat-history-selector-chat-row',
-          selectedChatId === chat.id ? 'is-active' : '',
-          nested ? 'is-nested' : ''
-        ]
-          .filter(Boolean)
-          .join(' ')}
+      <SwipeableHistoryChatRow
+        active={selectedChatId === chat.id}
         key={chat.id}
-      >
-        {nested ? <NestedHistoryGutter kind="chat" /> : null}
-        <button
-          className="chat-history-selector-chat-surface"
-          type="button"
-          {...bindLongPress(chat)}
-        >
-          <div className="chat-history-selector-chat-title-row">
-            <div className="chat-history-selector-chat-title-block">
-              <strong>{chat.title}</strong>
-              {chat.active_streaming ? (
-                <span className="chat-history-selector-streaming-dot" />
-              ) : null}
-            </div>
-            {chat.locked ? <LockIcon size={16} /> : null}
-          </div>
-
-          {parentChat ? (
-            <div className="chat-history-selector-parent-line">
-              <BranchIcon size={14} />
-              <span>{parentChat.title}</span>
-            </div>
-          ) : null}
-        </button>
-      </div>
+        chat={chat}
+        nested={nested}
+        onDelete={(target) => setDeleteTarget(target)}
+        onDismissSwipeHint={dismissSwipeHint}
+        onLongPress={(target) => setActionTarget(target)}
+        onRename={(target) => {
+          setEditingChat(target);
+          setDraftTitle(target.title);
+        }}
+        onSelect={onSelectChat}
+        parentChat={parentChat}
+      />
     );
   }
 
@@ -681,9 +869,11 @@ export function ChatHistorySelector({
                   if (!trimmed) {
                     return;
                   }
-                  onCreateChat({ group: trimmed });
-                  setShowNewGroupDialog(false);
-                  setNewGroupName('');
+                  void (async () => {
+                    await onCreateChat({ group: trimmed });
+                    setShowNewGroupDialog(false);
+                    setNewGroupName('');
+                  })();
                 }}
                 type="button"
               >
@@ -718,9 +908,11 @@ export function ChatHistorySelector({
               </button>
               <button
                 onClick={() => {
-                  onRenameChat(editingChat, draftTitle);
-                  setEditingChat(null);
-                  setDraftTitle('');
+                  void (async () => {
+                    await onRenameChat(editingChat, draftTitle);
+                    setEditingChat(null);
+                    setDraftTitle('');
+                  })();
                 }}
                 type="button"
               >
@@ -746,8 +938,10 @@ export function ChatHistorySelector({
               <button
                 className="is-danger"
                 onClick={() => {
-                  onDeleteChat(deleteTarget);
-                  setDeleteTarget(null);
+                  void (async () => {
+                    await onDeleteChat(deleteTarget);
+                    setDeleteTarget(null);
+                  })();
                 }}
                 type="button"
               >

@@ -310,7 +310,62 @@
   padding: 2px 0;
 }
 
+.chat-history-selector-swipe-shell {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  touch-action: pan-y;
+}
+
+.chat-history-selector-swipe-track {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+.chat-history-selector-swipe-actions {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.chat-history-selector-swipe-action {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  width: 116px;
+  color: #fff;
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.chat-history-selector-swipe-action.is-start {
+  left: 0;
+  justify-content: flex-start;
+  padding-left: 16px;
+  background: var(--chat-primary);
+}
+
+.chat-history-selector-swipe-action.is-end {
+  right: 0;
+  justify-content: flex-end;
+  padding-right: 16px;
+  background: var(--chat-action-danger-bg);
+  color: var(--chat-action-danger-fg);
+}
+
+.chat-history-selector-swipe-action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+}
+
 .chat-history-selector-chat-surface {
+  position: relative;
   display: grid;
   gap: 2px;
   width: 100%;
@@ -320,6 +375,12 @@
   background: var(--chat-history-item-bg);
   color: var(--chat-text-main);
   text-align: left;
+  transition: transform 180ms ease, background 160ms ease, color 160ms ease;
+  will-change: transform;
+}
+
+.chat-history-selector-chat-surface.is-dragging {
+  transition: none;
 }
 
 .chat-history-selector-chat-row.is-active .chat-history-selector-chat-surface {

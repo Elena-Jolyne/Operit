@@ -39,3 +39,4 @@ message_insert
 apktool
 remote_operit
 pdf_vision_parser
+hex_editor.js

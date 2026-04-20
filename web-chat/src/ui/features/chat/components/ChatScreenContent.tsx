@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChatArea } from './ChatArea';
 import { CharacterSelectorPanel } from './CharacterSelectorPanel';
 import { ChatHistorySelector } from './ChatHistorySelector';
@@ -24,12 +24,6 @@ export function ChatScreenContent({
   const overlayMode = Boolean(viewModel.theme?.header.overlay);
   const showInputProcessingStatus =
     viewModel.theme?.show_input_processing_status ?? viewModel.boot?.show_input_processing_status ?? true;
-  const modelLabel = useMemo(() => {
-    const lastAssistantMessage = [...viewModel.messages]
-      .reverse()
-      .find((message) => message.sender === 'assistant');
-    return lastAssistantMessage?.model_name || '当前模型';
-  }, [viewModel.messages]);
 
   useEffect(() => {
     const element = headerRef.current;
@@ -89,7 +83,8 @@ export function ChatScreenContent({
       isLoading={viewModel.isStreaming || viewModel.isConnecting}
       isPendingQueueExpanded={viewModel.isPendingQueueExpanded}
       messageInput={viewModel.messageInput}
-      modelLabel={modelLabel}
+      modelSelector={viewModel.modelSelector}
+      modelSelectorLoading={viewModel.modelSelectorLoading}
       onAttachmentPanelChange={viewModel.setAttachmentPanelOpen}
       onCancelMessage={viewModel.cancelCurrentMessage}
       onDeletePendingQueueMessage={viewModel.deletePendingQueueMessage}
@@ -98,6 +93,7 @@ export function ChatScreenContent({
       onPendingQueueExpandedChange={viewModel.setPendingQueueExpanded}
       onQueueMessage={viewModel.queueDraftMessage}
       onRemovePendingUpload={viewModel.removePendingUpload}
+      onSelectModelConfig={viewModel.selectModelConfig}
       onSendMessage={viewModel.sendMessage}
       onSendPendingQueueMessage={viewModel.sendPendingQueueMessage}
       onUploadFiles={viewModel.uploadFiles}
@@ -114,6 +110,8 @@ export function ChatScreenContent({
       isLoading={viewModel.isStreaming || viewModel.isConnecting}
       isPendingQueueExpanded={viewModel.isPendingQueueExpanded}
       messageInput={viewModel.messageInput}
+      modelSelector={viewModel.modelSelector}
+      modelSelectorLoading={viewModel.modelSelectorLoading}
       onAttachmentPanelChange={viewModel.setAttachmentPanelOpen}
       onCancelMessage={viewModel.cancelCurrentMessage}
       onDeletePendingQueueMessage={viewModel.deletePendingQueueMessage}
@@ -122,6 +120,7 @@ export function ChatScreenContent({
       onPendingQueueExpandedChange={viewModel.setPendingQueueExpanded}
       onQueueMessage={viewModel.queueDraftMessage}
       onRemovePendingUpload={viewModel.removePendingUpload}
+      onSelectModelConfig={viewModel.selectModelConfig}
       onSendMessage={viewModel.sendMessage}
       onSendPendingQueueMessage={viewModel.sendPendingQueueMessage}
       onUploadFiles={viewModel.uploadFiles}
@@ -149,15 +148,9 @@ export function ChatScreenContent({
         busy={viewModel.isBusy || viewModel.historyLoading}
         chats={viewModel.chats}
         onClose={() => viewModel.setHistoryOpen(false)}
-        onCreateChat={(options) => {
-          void viewModel.createConversation(options);
-        }}
-        onDeleteChat={(chat) => {
-          void viewModel.deleteConversation(chat);
-        }}
-        onRenameChat={(chat, title) => {
-          void viewModel.renameConversation(chat, title);
-        }}
+        onCreateChat={viewModel.createConversation}
+        onDeleteChat={viewModel.deleteConversation}
+        onRenameChat={viewModel.renameConversation}
         onSearchChange={viewModel.setSearch}
         onSelectChat={viewModel.selectChat}
         open={viewModel.historyOpen}

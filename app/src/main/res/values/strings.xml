@@ -550,6 +550,8 @@
     <string name="history_filter_current_card_desc">仅显示当前角色卡下的文件夹和对话</string>
     <string name="history_auto_switch_character">自动切换角色卡</string>
     <string name="history_auto_switch_character_desc">切换对话时自动匹配绑定的角色卡</string>
+    <string name="history_auto_switch_chat">自动切换聊天</string>
+    <string name="history_auto_switch_chat_desc">切换角色卡或群组时自动进入对应的最新对话，没有则创建</string>
     
     <!-- Terminal Screen -->
     <string name="termux_not_installed">Termux 未安装</string>
@@ -4857,6 +4859,10 @@
     <string name="chat_message_locator_title">跳转到消息</string>
     <string name="chat_message_locator_current">当前定位：第 %1$d / %2$d 条</string>
     <string name="chat_message_locator_hint">点击任意一条消息即可快速跳转</string>
+    <string name="chat_message_locator_search_label">搜索消息</string>
+    <string name="chat_message_locator_search_placeholder">输入消息内容关键词</string>
+    <string name="chat_message_locator_search_results">找到 %1$d 条结果，点击即可跳转</string>
+    <string name="chat_message_locator_search_empty">没有找到匹配的消息</string>
     <string name="chat_sender_user">用户</string>
     <string name="chat_sender_ai">AI</string>
     <string name="chat_sender_summary">总结</string>

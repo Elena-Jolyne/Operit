@@ -507,6 +507,8 @@
     <string name="history_filter_current_card_desc">Mostrar apenas pastas e conversas no cartão de personagem atual</string>
     <string name="history_auto_switch_character">Trocar cartões de personagem automaticamente</string>
     <string name="history_auto_switch_character_desc">Combine automaticamente cartões de personagens vinculados ao trocar de conversa</string>
+    <string name="history_auto_switch_chat">Trocar conversa automaticamente</string>
+    <string name="history_auto_switch_chat_desc">Ao trocar o cartão de personagem ou grupo, abra a conversa mais recente correspondente ou crie uma se não existir</string>
     <string name="termux_not_installed">Termux não está instalado</string>
     <string name="termux_not_running">Termux não está funcionando</string>
     <string name="termux_command">Comando termux</string>

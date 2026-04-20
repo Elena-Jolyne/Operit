@@ -129,6 +129,7 @@ class DeepgramSttProvider(
         languageCode: String,
         continuousMode: Boolean,
         partialResults: Boolean,
+        audioSource: Int,
     ): Boolean {
         if (!isInitialized.value) {
             val ok = initialize()
@@ -151,7 +152,7 @@ class DeepgramSttProvider(
                 }
 
                 val record = AudioRecord(
-                    MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+                    audioSource,
                     SAMPLE_RATE,
                     CHANNEL_CONFIG,
                     AUDIO_FORMAT,

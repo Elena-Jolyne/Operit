@@ -1,5 +1,6 @@
 package com.ai.assistance.operit.api.speech
 
+import android.media.MediaRecorder
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -70,12 +71,14 @@ interface SpeechService {
      * @param languageCode 语言代码，例如 "zh-CN"、"en-US"
      * @param continuousMode 是否持续识别模式，true表示不会自动停止，直到调用stop()
      * @param partialResults 是否返回部分结果，若为false则只返回最终结果
+     * @param audioSource 录音源，默认使用 VOICE_COMMUNICATION
      * @return 开始识别是否成功
      */
     suspend fun startRecognition(
             languageCode: String = "zh-CN",
             continuousMode: Boolean = false,
-            partialResults: Boolean = true
+            partialResults: Boolean = true,
+            audioSource: Int = MediaRecorder.AudioSource.VOICE_COMMUNICATION,
     ): Boolean
 
     /**

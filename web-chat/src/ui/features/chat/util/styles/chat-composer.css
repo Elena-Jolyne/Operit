@@ -371,7 +371,16 @@
   position: absolute;
   right: 0;
   z-index: 5;
+  display: flex;
+  flex-direction: column;
   width: min(300px, calc(100vw - 32px));
+  max-height: min(
+    420px,
+    calc(
+      100dvh - max(8px, env(safe-area-inset-top)) - max(8px, env(safe-area-inset-bottom)) - 88px
+    )
+  );
+  min-height: 0;
   overflow: hidden;
   border: 1px solid var(--chat-border);
   border-radius: 8px;
@@ -381,6 +390,180 @@
 
 .classic-settings-popup {
   bottom: 34px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+.model-selector-panel {
+  width: 100%;
+}
+
+.model-selector-header {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+}
+
+.model-selector-header-icon,
+.model-selector-info-button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--chat-text-soft);
+}
+
+.model-selector-info-button {
+  width: 24px;
+  height: 24px;
+}
+
+.model-selector-summary {
+  display: inline-flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  background: transparent;
+  color: var(--chat-text-main);
+  text-align: left;
+}
+
+.model-selector-summary.is-clickable {
+  cursor: pointer;
+}
+
+.model-selector-summary-label {
+  flex: 0 0 auto;
+  font-size: 13px;
+}
+
+.model-selector-summary-value {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--chat-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-selector-body {
+  padding: 8px 12px 10px;
+  background: color-mix(in srgb, var(--chat-surface-color) 50%, transparent);
+}
+
+.model-selector-empty {
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--chat-text-soft);
+}
+
+.model-selector-config-block + .model-selector-config-block {
+  margin-top: 4px;
+}
+
+.model-selector-config-row,
+.model-selector-model-row {
+  display: flex;
+  width: 100%;
+  min-height: 34px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--chat-text-main);
+  text-align: left;
+}
+
+.model-selector-config-row.is-selected,
+.model-selector-model-row.is-selected {
+  background: color-mix(in srgb, var(--chat-primary) 15%, transparent);
+}
+
+.model-selector-config-name,
+.model-selector-model-row {
+  font-size: 13px;
+}
+
+.model-selector-config-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-selector-config-row.is-selected .model-selector-config-name,
+.model-selector-model-row.is-selected {
+  font-weight: 700;
+  color: var(--chat-primary);
+}
+
+.model-selector-config-tail {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  color: var(--chat-text-soft);
+}
+
+.model-selector-config-count,
+.model-selector-config-model {
+  font-size: 11px;
+  color: var(--chat-text-soft);
+}
+
+.model-selector-config-model {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-selector-model-list {
+  margin: 4px 0 0 16px;
+  padding: 4px 8px 4px 0;
+  background: color-mix(in srgb, var(--chat-surface-variant-color) 30%, transparent);
+}
+
+.model-selector-model-row + .model-selector-model-row {
+  margin-top: 2px;
+}
+
+.model-selector-manage-button {
+  width: 100%;
+  min-height: 30px;
+  margin-top: 2px;
+  background: transparent;
+  color: var(--chat-primary);
+  font-size: 13px;
+}
+
+.model-selector-lock-hint,
+.model-selector-local-message {
+  margin-top: 8px;
+  padding: 0 8px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.model-selector-lock-hint {
+  color: var(--chat-text-soft);
+}
+
+.model-selector-local-message {
+  color: var(--chat-danger, #d15a5a);
 }
 
 .classic-settings-popup-row,
@@ -398,6 +581,10 @@
 
 .classic-settings-popup-row + .classic-settings-popup-row,
 .agent-popup-row + .agent-popup-row {
+  border-top: 1px solid color-mix(in srgb, var(--chat-border) 74%, transparent);
+}
+
+.model-selector-panel + .classic-settings-popup-row {
   border-top: 1px solid color-mix(in srgb, var(--chat-border) 74%, transparent);
 }
 
@@ -544,11 +731,16 @@
 
 .agent-popup-card {
   position: relative;
-  max-height: 420px;
+  min-height: 0;
 }
 
 .agent-popup-scroll {
-  overflow: auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 
 .agent-popup-section {

@@ -17,10 +17,13 @@ import {
   TuneIcon
 } from '../../../../util/chatIcons';
 import { InputOverlayPopup } from '../common/InputOverlayPopup';
+import { ModelSelectorPanel } from '../common/ModelSelectorPanel';
 import { PendingMessageQueuePanel } from '../common/PendingMessageQueuePanel';
 import type {
   InputProcessingStage,
   PendingQueueMessageItem,
+  WebModelSelectorState,
+  WebSelectModelResponse,
   WebThemeSnapshot,
   WebUploadedAttachment
 } from '../../../../util/chatTypes';
@@ -52,7 +55,9 @@ export function AgentChatInputSection({
   onDeletePendingQueueMessage,
   onEditPendingQueueMessage,
   onSendPendingQueueMessage,
-  modelLabel,
+  modelSelector,
+  modelSelectorLoading,
+  onSelectModelConfig,
   contextPercent,
   theme
 }: {
@@ -75,7 +80,13 @@ export function AgentChatInputSection({
   onDeletePendingQueueMessage: (id: number) => void;
   onEditPendingQueueMessage: (id: number) => void;
   onSendPendingQueueMessage: (id: number) => Promise<void>;
-  modelLabel: string;
+  modelSelector: WebModelSelectorState | null;
+  modelSelectorLoading: boolean;
+  onSelectModelConfig: (
+    configId: string,
+    modelIndex: number,
+    confirmCharacterCardSwitch?: boolean
+  ) => Promise<WebSelectModelResponse | null>;
   contextPercent: number;
   theme: WebThemeSnapshot | null;
 }) {
@@ -89,6 +100,13 @@ export function AgentChatInputSection({
   const showProcessingStatus = showInputProcessingStatus && inputProcessingStage !== 'idle';
   const processingProgress =
     inputProcessingStage === 'streaming' ? 0.82 : inputProcessingStage === 'uploading' ? 0.56 : 0.4;
+  const modelLabel = (() => {
+    const currentModelName = modelSelector?.current_model_name?.trim();
+    if (!currentModelName) {
+      return '模型配置';
+    }
+    return currentModelName.length > 26 ? `${currentModelName.slice(0, 26)}...` : currentModelName;
+  })();
   const progressRadius = 18;
   const circumference = 2 * Math.PI * progressRadius;
   const dashOffset = circumference - processingProgress * circumference;
@@ -284,18 +302,15 @@ export function AgentChatInputSection({
             </button>
 
             <div className="agent-popup-section">
-              <div className="agent-popup-row is-section-header">
-                <span className="agent-popup-row-icon">
-                  <HistoryIcon size={16} />
-                </span>
-                <span className="agent-popup-row-copy is-inline">
-                  <strong>模型配置:</strong>
-                  <em className="is-accent">{modelLabel || '未选择'}</em>
-                </span>
-              </div>
-              <button className="agent-popup-manage" type="button">
-                管理所有模型配置
-              </button>
+              <ModelSelectorPanel
+                allowCollapse={false}
+                expanded
+                loading={modelSelectorLoading}
+                onExpandedChange={() => {}}
+                onSelectModel={onSelectModelConfig}
+                onSelectionCommitted={() => setShowModelSelector(false)}
+                selector={modelSelector}
+              />
             </div>
           </div>
         </InputOverlayPopup>

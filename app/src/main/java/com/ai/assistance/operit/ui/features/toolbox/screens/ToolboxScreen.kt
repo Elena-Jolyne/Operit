@@ -445,7 +445,7 @@ fun ToolCard(tool: Tool) {
         ) {
                 // 卡片内容
                 Column(
-                        modifier = Modifier.padding(12.dp),
+                        modifier = Modifier.fillMaxSize().padding(12.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {

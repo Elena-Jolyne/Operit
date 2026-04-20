@@ -225,7 +225,8 @@ class SherpaSpeechProvider(private val context: Context) : SpeechService {
     override suspend fun startRecognition(
             languageCode: String,
             continuousMode: Boolean,
-            partialResults: Boolean
+            partialResults: Boolean,
+            audioSource: Int,
     ): Boolean {
         return recognitionMutex.withLock {
             if (!isInitialized.value) {
@@ -278,7 +279,7 @@ class SherpaSpeechProvider(private val context: Context) : SpeechService {
 
             audioRecord =
                     AudioRecord(
-                            MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+                            audioSource,
                             sampleRateInHz,
                             channelConfig,
                             audioFormat,

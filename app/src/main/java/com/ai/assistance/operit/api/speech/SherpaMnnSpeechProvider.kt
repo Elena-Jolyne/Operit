@@ -282,7 +282,8 @@ class SherpaMnnSpeechProvider(private val context: Context) : SpeechService {
     override suspend fun startRecognition(
             languageCode: String,
             continuousMode: Boolean,
-            partialResults: Boolean
+            partialResults: Boolean,
+            audioSource: Int,
     ): Boolean {
         if (!isInitialized.value) {
             if (!initialize()) return false
@@ -336,7 +337,7 @@ class SherpaMnnSpeechProvider(private val context: Context) : SpeechService {
         }
 
         audioRecord = AudioRecord(
-            MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+            audioSource,
             sampleRateInHz,
             channelConfig,
             audioFormat,

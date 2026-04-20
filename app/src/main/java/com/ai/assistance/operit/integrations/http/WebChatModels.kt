@@ -436,6 +436,42 @@ data class WebCharacterSelectorResponse(
 )
 
 @Serializable
+data class WebModelSelectorState(
+    @SerialName("current_config_id")
+    val currentConfigId: String,
+    @SerialName("current_config_name")
+    val currentConfigName: String? = null,
+    @SerialName("current_model_index")
+    val currentModelIndex: Int,
+    @SerialName("current_model_name")
+    val currentModelName: String,
+    @SerialName("locked_by_character_card")
+    val lockedByCharacterCard: Boolean,
+    @SerialName("locked_character_card_id")
+    val lockedCharacterCardId: String? = null,
+    @SerialName("locked_character_card_name")
+    val lockedCharacterCardName: String? = null,
+    @SerialName("configs")
+    val configs: List<WebModelSelectorConfig> = emptyList()
+)
+
+@Serializable
+data class WebModelSelectorConfig(
+    @SerialName("id")
+    val id: String,
+    @SerialName("name")
+    val name: String,
+    @SerialName("model_name")
+    val modelName: String,
+    @SerialName("models")
+    val models: List<String> = emptyList(),
+    @SerialName("selected")
+    val selected: Boolean = false,
+    @SerialName("selected_model_index")
+    val selectedModelIndex: Int? = null
+)
+
+@Serializable
 data class WebChatStreamEvent(
     @SerialName("event")
     val event: String,
@@ -485,6 +521,26 @@ data class WebSetActivePromptRequest(
     val type: String,
     @SerialName("id")
     val id: String
+)
+
+@Serializable
+data class WebSelectModelRequest(
+    @SerialName("config_id")
+    val configId: String,
+    @SerialName("model_index")
+    val modelIndex: Int = 0,
+    @SerialName("confirm_character_card_switch")
+    val confirmCharacterCardSwitch: Boolean = false
+)
+
+@Serializable
+data class WebSelectModelResponse(
+    @SerialName("success")
+    val success: Boolean,
+    @SerialName("requires_character_card_switch_confirmation")
+    val requiresCharacterCardSwitchConfirmation: Boolean = false,
+    @SerialName("selector")
+    val selector: WebModelSelectorState
 )
 
 @Serializable

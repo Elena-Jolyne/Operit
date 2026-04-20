@@ -56,6 +56,7 @@ import com.ai.assistance.operit.api.voice.VoiceService
 import com.ai.assistance.operit.api.voice.VoiceServiceFactory
 import com.ai.assistance.operit.data.preferences.SpeechServicesPreferences
 import com.ai.assistance.operit.data.preferences.ActivePromptManager
+import com.ai.assistance.operit.data.preferences.CharacterCardManager
 import com.ai.assistance.operit.data.model.ActivePrompt
 import com.ai.assistance.operit.util.WaifuMessageProcessor
 import com.ai.assistance.operit.ui.features.chat.webview.workspace.WorkspaceBackupManager
@@ -100,6 +101,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     private var voiceService: VoiceService? = null
     private val speechServicesPreferences = SpeechServicesPreferences(context)
     private val activePromptManager = ActivePromptManager.getInstance(context)
+    private val characterCardManager = CharacterCardManager.getInstance(context)
 
     // 添加语音播放状态
     private val _isPlaying = MutableStateFlow(false)
@@ -282,12 +284,20 @@ class ChatViewModel(private val context: Context) : ViewModel() {
         setAutoSwitchCharacterCard(!_autoSwitchCharacterCard.value)
     }
 
+    fun setAutoSwitchChatOnCharacterSelect(enabled: Boolean) {
+        _autoSwitchChatOnCharacterSelect.value = enabled
+    }
+
     private val _historyDisplayMode =
             MutableStateFlow(ChatHistoryDisplayMode.CURRENT_CHARACTER_ONLY)
     val historyDisplayMode: StateFlow<ChatHistoryDisplayMode> = _historyDisplayMode.asStateFlow()
 
     private val _autoSwitchCharacterCard = MutableStateFlow(false)
     val autoSwitchCharacterCard: StateFlow<Boolean> = _autoSwitchCharacterCard.asStateFlow()
+
+    private val _autoSwitchChatOnCharacterSelect = MutableStateFlow(false)
+    val autoSwitchChatOnCharacterSelect: StateFlow<Boolean> =
+        _autoSwitchChatOnCharacterSelect.asStateFlow()
     
     // 总结状态
     val isSummarizing: StateFlow<Boolean> by lazy {
@@ -713,6 +723,10 @@ class ChatViewModel(private val context: Context) : ViewModel() {
                     activePromptManager.setActivePrompt(ActivePrompt.CharacterGroup(target.id))
                 }
             }
+
+            if (_autoSwitchChatOnCharacterSelect.value) {
+                autoSwitchChatForCharacterTarget(target)
+            }
         }
     }
 
@@ -726,6 +740,58 @@ class ChatViewModel(private val context: Context) : ViewModel() {
         }.onFailure { throwable ->
             AppLogger.w(TAG, "Auto switch character target failed: ${throwable.message}")
         }
+    }
+
+    private suspend fun autoSwitchChatForCharacterTarget(target: CharacterSelectorTarget) {
+        runCatching {
+            when (target) {
+                is CharacterSelectorTarget.CharacterCardTarget -> {
+                    val targetCard = characterCardManager.getCharacterCard(target.id)
+                    val latestChat = findLatestChatForCharacterCard(targetCard)
+                    if (latestChat != null) {
+                        switchChat(latestChat.id)
+                    } else {
+                        chatHistoryDelegate.createNewChat(characterCardId = target.id)
+                    }
+                }
+                is CharacterSelectorTarget.CharacterGroupTarget -> {
+                    val targetGroupId = target.id.trim()
+                    val latestChat =
+                        chatHistories.value
+                            .asSequence()
+                            .filter { history ->
+                                history.characterGroupId?.trim() == targetGroupId
+                            }
+                            .maxByOrNull { it.updatedAt }
+                    if (latestChat != null) {
+                        switchChat(latestChat.id)
+                    } else {
+                        chatHistoryDelegate.createNewChat(characterGroupId = targetGroupId)
+                    }
+                }
+            }
+        }.onFailure { throwable ->
+            AppLogger.w(TAG, "Auto switch chat for character target failed: ${throwable.message}")
+        }
+    }
+
+    private fun findLatestChatForCharacterCard(targetCard: com.ai.assistance.operit.data.model.CharacterCard): ChatHistory? {
+        val targetCardName = targetCard.name.trim()
+        return chatHistories.value
+            .asSequence()
+            .filter { history ->
+                val historyGroupId = history.characterGroupId?.trim()?.takeIf { it.isNotBlank() }
+                if (!historyGroupId.isNullOrBlank()) {
+                    return@filter false
+                }
+                val historyCardName = history.characterCardName?.trim()?.takeIf { it.isNotBlank() }
+                if (targetCard.isDefault) {
+                    historyCardName == null || historyCardName == targetCardName
+                } else {
+                    historyCardName == targetCardName
+                }
+            }
+            .maxByOrNull { it.updatedAt }
     }
 
     /** 创建对话分支 */

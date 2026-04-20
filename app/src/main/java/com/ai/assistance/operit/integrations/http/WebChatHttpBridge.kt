@@ -6,6 +6,7 @@ import android.net.Uri
 import android.webkit.MimeTypeMap
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.BuildConfig
+import com.ai.assistance.operit.api.chat.EnhancedAIService
 import com.ai.assistance.operit.api.chat.llmprovider.MediaLinkParser
 import com.ai.assistance.operit.api.chat.ChatRuntimeHolder
 import com.ai.assistance.operit.api.chat.ChatRuntimeSlot
@@ -14,13 +15,21 @@ import com.ai.assistance.operit.data.model.AttachmentInfo
 import com.ai.assistance.operit.data.model.ChatHistory
 import com.ai.assistance.operit.data.model.ChatMessage
 import com.ai.assistance.operit.data.model.CharacterCard
+import com.ai.assistance.operit.data.model.CharacterCardChatModelBindingMode
 import com.ai.assistance.operit.data.model.CharacterGroupCard
+import com.ai.assistance.operit.data.model.FunctionType
 import com.ai.assistance.operit.data.model.InputProcessingState
+import com.ai.assistance.operit.data.model.getModelByIndex
+import com.ai.assistance.operit.data.model.getModelList
+import com.ai.assistance.operit.data.model.getValidModelIndex
 import com.ai.assistance.operit.data.preferences.ActivePromptManager
 import com.ai.assistance.operit.data.preferences.CharacterCardManager
 import com.ai.assistance.operit.data.preferences.CharacterGroupCardManager
 import com.ai.assistance.operit.data.preferences.DisplayPreferencesManager
 import com.ai.assistance.operit.data.preferences.ExternalHttpApiPreferences
+import com.ai.assistance.operit.data.preferences.FunctionConfigMapping
+import com.ai.assistance.operit.data.preferences.FunctionalConfigManager
+import com.ai.assistance.operit.data.preferences.ModelConfigManager
 import com.ai.assistance.operit.data.preferences.ThemePreferenceSnapshot
 import com.ai.assistance.operit.data.preferences.ToolCollapseMode
 import com.ai.assistance.operit.data.preferences.UserPreferencesManager
@@ -75,6 +84,8 @@ class WebChatHttpBridge(
     private val activePromptManager = ActivePromptManager.getInstance(appContext)
     private val characterCardManager = CharacterCardManager.getInstance(appContext)
     private val characterGroupCardManager = CharacterGroupCardManager.getInstance(appContext)
+    private val functionalConfigManager = FunctionalConfigManager(appContext)
+    private val modelConfigManager = ModelConfigManager(appContext)
     private val assetIdBySource = ConcurrentHashMap<String, String>()
     private val assetsById = ConcurrentHashMap<String, RegisteredAsset>()
     private val uploadsById = ConcurrentHashMap<String, UploadedAttachmentEntry>()
@@ -100,6 +111,12 @@ class WebChatHttpBridge(
 
             session.uri == ACTIVE_PROMPT_PATH && session.method == NanoHTTPD.Method.POST ->
                 handleSetActivePrompt(session)
+
+            session.uri == MODEL_SELECTOR_PATH && session.method == NanoHTTPD.Method.GET ->
+                handleModelSelector()
+
+            session.uri == MODEL_SELECTOR_PATH && session.method == NanoHTTPD.Method.POST ->
+                handleSelectModel(session)
 
             session.uri == CHATS_PATH && session.method == NanoHTTPD.Method.GET ->
                 handleListChats()
@@ -290,6 +307,94 @@ class WebChatHttpBridge(
             }
         }
         return jsonResponse(NanoHTTPD.Response.Status.OK, chats)
+    }
+
+    private fun handleModelSelector(): NanoHTTPD.Response {
+        val selector = runBlocking { resolveModelSelectorState() }
+        return jsonResponse(NanoHTTPD.Response.Status.OK, selector)
+    }
+
+    private fun handleSelectModel(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
+        val request = parseJsonRequest<WebSelectModelRequest>(session)
+            ?: return jsonResponse(
+                NanoHTTPD.Response.Status.BAD_REQUEST,
+                WebErrorResponse("Invalid JSON body")
+            )
+
+        val selectedId = request.configId.trim()
+        if (selectedId.isBlank()) {
+            return jsonResponse(
+                NanoHTTPD.Response.Status.BAD_REQUEST,
+                WebErrorResponse("Missing config_id")
+            )
+        }
+
+        val response = runBlocking {
+            functionalConfigManager.initializeIfNeeded()
+            modelConfigManager.initializeIfNeeded()
+
+            val selectorBefore = resolveModelSelectorState()
+            val targetConfig = selectorBefore.configs.firstOrNull { it.id == selectedId }
+                ?: return@runBlocking null
+            val normalizedModelIndex = if (targetConfig.models.isEmpty()) {
+                0
+            } else {
+                getValidModelIndex(targetConfig.modelName, request.modelIndex)
+            }
+            val isSameSelection =
+                selectorBefore.currentConfigId == selectedId &&
+                    selectorBefore.currentModelIndex == normalizedModelIndex
+
+            if (
+                selectorBefore.lockedByCharacterCard &&
+                    !isSameSelection &&
+                    !request.confirmCharacterCardSwitch
+            ) {
+                return@runBlocking WebSelectModelResponse(
+                    success = false,
+                    requiresCharacterCardSwitchConfirmation = true,
+                    selector = selectorBefore
+                )
+            }
+
+            if (!isSameSelection) {
+                if (selectorBefore.lockedByCharacterCard) {
+                    val activePrompt = activePromptManager.getActivePrompt()
+                    if (activePrompt !is ActivePrompt.CharacterCard) {
+                        return@runBlocking null
+                    }
+                    val activeCard = characterCardManager.getCharacterCard(activePrompt.id)
+                    characterCardManager.updateCharacterCard(
+                        activeCard.copy(
+                            chatModelBindingMode = CharacterCardChatModelBindingMode.FIXED_CONFIG,
+                            chatModelConfigId = selectedId,
+                            chatModelIndex = normalizedModelIndex
+                        )
+                    )
+                } else {
+                    functionalConfigManager.setConfigForFunction(
+                        FunctionType.CHAT,
+                        selectedId,
+                        normalizedModelIndex
+                    )
+                }
+                EnhancedAIService.refreshServiceForFunction(appContext, FunctionType.CHAT)
+            }
+
+            WebSelectModelResponse(
+                success = true,
+                selector = resolveModelSelectorState()
+            )
+        }
+
+        return if (response == null) {
+            jsonResponse(
+                NanoHTTPD.Response.Status.NOT_FOUND,
+                WebErrorResponse("Model config not found")
+            )
+        } else {
+            jsonResponse(NanoHTTPD.Response.Status.OK, response)
+        }
     }
 
     private fun handleCreateChat(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
@@ -993,6 +1098,76 @@ class WebChatHttpBridge(
                 }
             }
         }
+    }
+
+    private suspend fun resolveModelSelectorState(): WebModelSelectorState {
+        functionalConfigManager.initializeIfNeeded()
+        modelConfigManager.initializeIfNeeded()
+
+        val configSummaries = modelConfigManager.getAllConfigSummaries()
+        val activePrompt = activePromptManager.getActivePrompt()
+        val lockedCard = when (activePrompt) {
+            is ActivePrompt.CharacterCard -> {
+                val card = characterCardManager.getCharacterCard(activePrompt.id)
+                if (
+                    CharacterCardChatModelBindingMode.normalize(card.chatModelBindingMode) ==
+                        CharacterCardChatModelBindingMode.FIXED_CONFIG &&
+                        !card.chatModelConfigId.isNullOrBlank()
+                ) {
+                    card
+                } else {
+                    null
+                }
+            }
+
+            is ActivePrompt.CharacterGroup -> null
+        }
+
+        val currentConfigMapping = if (lockedCard != null) {
+            FunctionConfigMapping(
+                configId = lockedCard.chatModelConfigId ?: FunctionalConfigManager.DEFAULT_CONFIG_ID,
+                modelIndex = lockedCard.chatModelIndex.coerceAtLeast(0)
+            )
+        } else {
+            functionalConfigManager.getConfigMappingForFunction(FunctionType.CHAT)
+        }
+
+        val currentConfig = configSummaries.firstOrNull { it.id == currentConfigMapping.configId }
+        val currentModelIndex = currentConfig?.let {
+            getValidModelIndex(it.modelName, currentConfigMapping.modelIndex)
+        } ?: 0
+        val currentModelName = currentConfig?.let {
+            getModelByIndex(it.modelName, currentModelIndex)
+        }?.takeIf { it.isNotBlank() } ?: appContext.getString(R.string.not_selected)
+
+        return WebModelSelectorState(
+            currentConfigId = currentConfigMapping.configId,
+            currentConfigName = currentConfig?.name,
+            currentModelIndex = currentModelIndex,
+            currentModelName = currentModelName,
+            lockedByCharacterCard = lockedCard != null,
+            lockedCharacterCardId = lockedCard?.id,
+            lockedCharacterCardName = lockedCard?.name,
+            configs = configSummaries.map { config ->
+                val models = getModelList(config.modelName)
+                WebModelSelectorConfig(
+                    id = config.id,
+                    name = config.name,
+                    modelName = config.modelName,
+                    models = models,
+                    selected = config.id == currentConfigMapping.configId,
+                    selectedModelIndex = if (config.id == currentConfigMapping.configId) {
+                        if (models.isEmpty()) {
+                            0
+                        } else {
+                            getValidModelIndex(config.modelName, currentConfigMapping.modelIndex)
+                        }
+                    } else {
+                        null
+                    }
+                )
+            }
+        )
     }
 
     private suspend fun resolveDefaultCharacterPromptSnapshot(
@@ -2203,6 +2378,7 @@ class WebChatHttpBridge(
         private const val BOOTSTRAP_PATH = "/api/web/bootstrap"
         private const val CHARACTER_SELECTOR_PATH = "/api/web/character-selector"
         private const val ACTIVE_PROMPT_PATH = "/api/web/active-prompt"
+        private const val MODEL_SELECTOR_PATH = "/api/web/model-selector"
         private const val CHATS_PATH = "/api/web/chats"
         private const val UPLOADS_PATH = "/api/web/uploads"
         private const val ASSET_ROUTE_PREFIX = "/api/web/assets"

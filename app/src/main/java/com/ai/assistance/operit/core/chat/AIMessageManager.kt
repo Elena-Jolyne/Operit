@@ -689,6 +689,55 @@ object AIMessageManager {
             return cleaned
         }
 
+        fun extractXmlBody(block: String): String {
+            val openingEnd = block.indexOf('>')
+            val closingStart = block.lastIndexOf("</")
+            if (openingEnd == -1 || closingStart <= openingEnd) return ""
+            return block.substring(openingEnd + 1, closingStart).trim()
+        }
+
+        fun stripXmlTagsForReview(text: String): String {
+            return ChatMarkupRegex.anyXmlTag.replace(text, " ").trim()
+        }
+
+        fun condenseToolParams(block: String, maxParams: Int = 8): String {
+            val params = ChatMarkupRegex.toolParamPattern.findAll(block).mapNotNull { match ->
+                val paramName = match.groupValues.getOrNull(1)?.trim().orEmpty()
+                val rawValue = stripXmlTagsForReview(match.groupValues.getOrNull(2).orEmpty())
+                val preview = condenseHeadTail(rawValue, headChars = 72, tailChars = 32)
+                if (paramName.isBlank() || preview.isBlank()) {
+                    null
+                } else {
+                    "$paramName=$preview"
+                }
+            }.toList()
+            if (params.isEmpty()) return ""
+            val visible = params.take(maxParams)
+            val omittedCount = (params.size - visible.size).coerceAtLeast(0)
+            return buildString {
+                append(visible.joinToString("; "))
+                if (omittedCount > 0) {
+                    append("; ...+")
+                    append(omittedCount)
+                }
+            }
+        }
+
+        fun condenseToolBodyPreview(block: String): String {
+            val bodyWithoutParams = ChatMarkupRegex.toolParamPattern.replace(extractXmlBody(block), " ")
+            val cleanedBody = stripXmlTagsForReview(bodyWithoutParams)
+            return condenseHeadTail(cleanedBody, headChars = 120, tailChars = 48)
+        }
+
+        fun condenseToolResultPreview(block: String): String {
+            val resultBody =
+                ChatMarkupRegex.contentTag.find(block)?.groupValues?.getOrNull(1)
+                    ?: ChatMarkupRegex.errorTag.find(block)?.groupValues?.getOrNull(1)
+                    ?: extractXmlBody(block)
+            val cleanedBody = stripXmlTagsForReview(resultBody)
+            return condenseHeadTail(cleanedBody, headChars = 140, tailChars = 56)
+        }
+
         fun pruneUserMessageForReview(text: String): String {
             val removedLargeTags = text
                 .replace(
@@ -711,17 +760,33 @@ object AIMessageManager {
                     ?.groupValues
                     ?.getOrNull(1)
                     ?.ifBlank { null }
-                if (name != null) {
-                    context.getString(R.string.ai_message_tool_result_omitted, name)
-                } else {
-                    context.getString(R.string.ai_message_tool_result_omitted_short)
+                val status = ChatMarkupRegex.statusAttr
+                    .find(attrs)
+                    ?.groupValues
+                    ?.getOrNull(1)
+                    ?.ifBlank { null }
+                val statusSuffix = status?.let { " $it" }.orEmpty()
+                val preview = condenseToolResultPreview(mr.value)
+                buildString {
+                    if (name != null) {
+                        append("[结果: ")
+                        append(name)
+                        append(statusSuffix)
+                        append("]")
+                    } else {
+                        append(context.getString(R.string.ai_message_tool_result_omitted_short))
+                    }
+                    if (preview.isNotBlank()) {
+                        append(" ")
+                        append(preview)
+                    }
                 }
             }
         }
 
         fun condenseUserForReview(text: String): String {
             val pruned = pruneUserMessageForReview(text)
-            return condenseHeadTail(pruned, headChars = 60, tailChars = 20)
+            return condenseHeadTail(pruned, headChars = 240, tailChars = 96)
         }
 
         fun condenseAssistantForReview(text: String): String {
@@ -775,7 +840,7 @@ object AIMessageManager {
                 .mapNotNull { seg ->
                     when (seg.kind) {
                         "text" -> {
-                            val stripped = seg.raw.replace(Regex("<[^>]*>"), " ").trim()
+                            val stripped = stripXmlTagsForReview(seg.raw)
                             if (stripped.isBlank()) null else seg.copy(raw = stripped)
                         }
                         else -> seg
@@ -783,10 +848,10 @@ object AIMessageManager {
                 }
                 .toMutableList()
 
-            val maxSegments = 13
+            val maxSegments = 25
             if (cleanedSegments.size > maxSegments) {
-                val head = cleanedSegments.take(6)
-                val tail = cleanedSegments.takeLast(5)
+                val head = cleanedSegments.take(12)
+                val tail = cleanedSegments.takeLast(10)
                 val omitted = (cleanedSegments.size - head.size - tail.size).coerceAtLeast(0)
                 cleanedSegments.clear()
                 cleanedSegments.addAll(head)
@@ -798,11 +863,27 @@ object AIMessageManager {
             val parts = cleanedSegments.mapIndexedNotNull { index, seg ->
                 when (seg.kind) {
                     "text" -> {
-                        val headChars = if (index == lastTextIndex) 60 else 24
-                        val tailChars = if (index == lastTextIndex) 24 else 12
+                        val headChars = if (index == lastTextIndex) 280 else 120
+                        val tailChars = if (index == lastTextIndex) 120 else 48
                         condenseHeadTail(seg.raw, headChars = headChars, tailChars = tailChars).takeIf { it.isNotBlank() }
                     }
-                    "tool" -> context.getString(R.string.ai_message_tool_start, seg.toolName ?: "tool")
+                    "tool" -> {
+                        val name = seg.toolName ?: "tool"
+                        val paramsPreview = condenseToolParams(seg.raw)
+                        val bodyPreview = condenseToolBodyPreview(seg.raw)
+                        buildString {
+                            append(context.getString(R.string.ai_message_tool_start, name))
+                            if (paramsPreview.isNotBlank()) {
+                                append(" ")
+                                append(paramsPreview)
+                            }
+                            if (bodyPreview.isNotBlank()) {
+                                if (paramsPreview.isNotBlank()) append(" | ")
+                                else append(" ")
+                                append(bodyPreview)
+                            }
+                        }.trim().ifBlank { null }
+                    }
                     "tool_result" -> {
                         val s = seg.status?.lowercase()
                         val statusText = when {
@@ -812,10 +893,23 @@ object AIMessageManager {
                             else -> s
                         }
                         val name = seg.toolName ?: "tool"
-                        if (statusText.isBlank()) {
-                            context.getString(R.string.ai_message_result_omitted, name)
-                        } else {
-                            context.getString(R.string.ai_message_result_omitted_with_status, name, statusText)
+                        val resultPreview = condenseToolResultPreview(seg.raw)
+                        buildString {
+                            if (statusText.isBlank()) {
+                                append("[结果: ")
+                                append(name)
+                                append("]")
+                            } else {
+                                append("[结果: ")
+                                append(name)
+                                append(" ")
+                                append(statusText)
+                                append("]")
+                            }
+                            if (resultPreview.isNotBlank()) {
+                                append(" ")
+                                append(resultPreview)
+                            }
                         }
                     }
                     else -> null
@@ -843,7 +937,7 @@ object AIMessageManager {
                     }
 
                     if (cleanedContent.isNotBlank()) {
-                        val displayContent = if (message.sender == "assistant") {
+                        val displayContent = if (message.sender == "ai") {
                             condenseAssistantForReview(cleanedContent)
                         } else {
                             condenseUserForReview(cleanedContent)

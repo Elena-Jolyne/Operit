@@ -421,6 +421,10 @@ val actualViewModel: ChatViewModel = viewModel ?: viewModel { ChatViewModel(cont
         "chat_history_auto_switch_character_card",
         false
     )
+    var autoSwitchChatOnCharacterSelect by rememberLocal(
+        "chat_history_auto_switch_chat_on_character_select",
+        false
+    )
     val displayedChatHistories = remember(
         chatHistories,
         activePrompt,
@@ -456,6 +460,9 @@ val actualViewModel: ChatViewModel = viewModel ?: viewModel { ChatViewModel(cont
     LaunchedEffect(autoSwitchCharacterCard) {
         actualViewModel.setAutoSwitchCharacterCard(autoSwitchCharacterCard)
     }
+    LaunchedEffect(autoSwitchChatOnCharacterSelect) {
+        actualViewModel.setAutoSwitchChatOnCharacterSelect(autoSwitchChatOnCharacterSelect)
+    }
     LaunchedEffect(
         activePrompt,
         activeCharacterCard,
@@ -476,13 +483,7 @@ val actualViewModel: ChatViewModel = viewModel ?: viewModel { ChatViewModel(cont
             return@LaunchedEffect
         }
         val currentId = currentChatId ?: ""
-        val hasCurrentChatInFilter = displayedChatHistories.any { it.id == currentId }
-        val hasCurrentChatInAll = currentId.isNotBlank() && chatHistories.any { it.id == currentId }
         if (currentId.isBlank()) {
-            actualViewModel.switchChat(displayedChatHistories.first().id)
-            return@LaunchedEffect
-        }
-        if (!hasCurrentChatInFilter && hasCurrentChatInAll) {
             actualViewModel.switchChat(displayedChatHistories.first().id)
         }
     }
@@ -1197,7 +1198,11 @@ val actualViewModel: ChatViewModel = viewModel ?: viewModel { ChatViewModel(cont
                                     historyDisplayMode = historyDisplayMode,
                                     onDisplayModeChange = { historyDisplayMode = it },
                                     autoSwitchCharacterCard = autoSwitchCharacterCard,
-                                    onAutoSwitchCharacterCardChange = { autoSwitchCharacterCard = it }
+                                    onAutoSwitchCharacterCardChange = { autoSwitchCharacterCard = it },
+                                    autoSwitchChatOnCharacterSelect = autoSwitchChatOnCharacterSelect,
+                                    onAutoSwitchChatOnCharacterSelectChange = {
+                                        autoSwitchChatOnCharacterSelect = it
+                                    }
                                 )
                             }
                         }

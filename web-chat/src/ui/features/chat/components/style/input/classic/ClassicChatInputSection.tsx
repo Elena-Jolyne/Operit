@@ -17,6 +17,8 @@ import { PendingMessageQueuePanel } from '../common/PendingMessageQueuePanel';
 import type {
   InputProcessingStage,
   PendingQueueMessageItem,
+  WebModelSelectorState,
+  WebSelectModelResponse,
   WebThemeSnapshot,
   WebUploadedAttachment
 } from '../../../../util/chatTypes';
@@ -48,6 +50,9 @@ export function ClassicChatInputSection({
   onDeletePendingQueueMessage,
   onEditPendingQueueMessage,
   onSendPendingQueueMessage,
+  modelSelector,
+  modelSelectorLoading,
+  onSelectModelConfig,
   contextPercent,
   theme
 }: {
@@ -70,6 +75,13 @@ export function ClassicChatInputSection({
   onDeletePendingQueueMessage: (id: number) => void;
   onEditPendingQueueMessage: (id: number) => void;
   onSendPendingQueueMessage: (id: number) => Promise<void>;
+  modelSelector: WebModelSelectorState | null;
+  modelSelectorLoading: boolean;
+  onSelectModelConfig: (
+    configId: string,
+    modelIndex: number,
+    confirmCharacterCardSwitch?: boolean
+  ) => Promise<WebSelectModelResponse | null>;
   contextPercent: number;
   theme: WebThemeSnapshot | null;
 }) {
@@ -197,6 +209,9 @@ export function ClassicChatInputSection({
 
       <ClassicChatSettingsBar
         contextPercent={contextPercent}
+        modelSelector={modelSelector}
+        modelSelectorLoading={modelSelectorLoading}
+        onSelectModelConfig={onSelectModelConfig}
         onToggleSettings={() => {
           onAttachmentPanelChange(false);
           setSettingsOpen(!settingsOpen);

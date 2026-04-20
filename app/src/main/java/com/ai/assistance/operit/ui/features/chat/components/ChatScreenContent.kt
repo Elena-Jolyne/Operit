@@ -848,7 +848,9 @@ fun ChatHistorySelectorPanel(
         historyDisplayMode: ChatHistoryDisplayMode,
         onDisplayModeChange: (ChatHistoryDisplayMode) -> Unit,
         autoSwitchCharacterCard: Boolean,
-        onAutoSwitchCharacterCardChange: (Boolean) -> Unit
+        onAutoSwitchCharacterCardChange: (Boolean) -> Unit,
+        autoSwitchChatOnCharacterSelect: Boolean,
+        onAutoSwitchChatOnCharacterSelectChange: (Boolean) -> Unit
 ) {
     // 历史选择器面板（不再包含遮罩层，遮罩层已在外部处理）
     Box(
@@ -911,6 +913,8 @@ fun ChatHistorySelectorPanel(
                 onDisplayModeChange = onDisplayModeChange,
                 autoSwitchCharacterCard = autoSwitchCharacterCard,
                 onAutoSwitchCharacterCardChange = onAutoSwitchCharacterCardChange,
+                autoSwitchChatOnCharacterSelect = autoSwitchChatOnCharacterSelect,
+                onAutoSwitchChatOnCharacterSelectChange = onAutoSwitchChatOnCharacterSelectChange,
                 onQuickScrollInteractionChange = { consumed ->
                     GestureStateHolder.isChatScreenGestureConsumed = consumed
                     onChatScreenGestureConsumed(consumed)

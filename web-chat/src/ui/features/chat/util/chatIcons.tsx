@@ -197,6 +197,28 @@ export function TuneIcon(props: IconProps) {
   );
 }
 
+export function InfoIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 10v6" />
+      <path d="M12 7.5h.01" />
+    </IconBase>
+  );
+}
+
+export function DataObjectIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M7 6.5h10" />
+      <path d="M6 10.5h12" />
+      <path d="M7 14.5h10" />
+      <path d="M9 18h6" />
+      <rect x="4" y="4" width="16" height="16" rx="3" />
+    </IconBase>
+  );
+}
+
 export function SortIcon(props: IconProps) {
   return (
     <IconBase {...props}>

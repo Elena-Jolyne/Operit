@@ -5,6 +5,8 @@ import type {
   WebChatStreamEvent,
   WebCharacterSelectorResponse,
   WebChatSummary,
+  WebModelSelectorState,
+  WebSelectModelResponse,
   WebThemeSnapshot,
   WebUploadedAttachment
 } from './chatTypes';
@@ -108,6 +110,26 @@ export async function setActivePrompt(
     token,
     { method: 'POST' },
     target
+  );
+}
+
+export async function getModelSelector(token: string): Promise<WebModelSelectorState> {
+  return requestJson<WebModelSelectorState>('/api/web/model-selector', token);
+}
+
+export async function selectModel(
+  token: string,
+  payload: {
+    config_id: string;
+    model_index: number;
+    confirm_character_card_switch?: boolean;
+  }
+): Promise<WebSelectModelResponse> {
+  return requestJson<WebSelectModelResponse>(
+    '/api/web/model-selector',
+    token,
+    { method: 'POST' },
+    payload
   );
 }
 

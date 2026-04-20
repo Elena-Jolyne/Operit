@@ -5,9 +5,11 @@ import {
   deleteChat,
   getCharacterSelector,
   getMessages,
+  getModelSelector,
   getTheme,
   listChats,
   renameChat,
+  selectModel as selectModelOnServer,
   selectChat as selectChatOnServer,
   setActivePrompt as setActivePromptOnServer,
   streamMessage,
@@ -30,6 +32,8 @@ import type {
   WebChatMessage,
   WebCharacterSelectorResponse,
   WebChatSummary,
+  WebModelSelectorState,
+  WebSelectModelResponse,
   WebThemeSnapshot,
   WebUploadedAttachment
 } from '../util/chatTypes';
@@ -191,6 +195,8 @@ export interface ChatViewModelState {
   characterSelector: WebCharacterSelectorResponse | null;
   characterSelectorOpen: boolean;
   characterSelectorLoading: boolean;
+  modelSelector: WebModelSelectorState | null;
+  modelSelectorLoading: boolean;
   chats: WebChatSummary[];
   visibleChats: WebChatSummary[];
   selectedChatId: string | null;
@@ -237,6 +243,11 @@ export interface ChatViewModelActions {
   setHistoryOpen: (value: boolean) => void;
   setCharacterSelectorOpen: (value: boolean) => void;
   switchActivePrompt: (target: WebActivePromptTarget) => Promise<void>;
+  selectModelConfig: (
+    configId: string,
+    modelIndex: number,
+    confirmCharacterCardSwitch?: boolean
+  ) => Promise<WebSelectModelResponse | null>;
   loadOlderMessages: () => Promise<void>;
   setAttachmentPanelOpen: (value: boolean) => void;
   queueDraftMessage: () => void;
@@ -257,6 +268,8 @@ export function useChatViewModel(): ChatViewModel {
   const [characterSelector, setCharacterSelector] = useState<WebCharacterSelectorResponse | null>(null);
   const [characterSelectorOpen, setCharacterSelectorOpenState] = useState(false);
   const [characterSelectorLoading, setCharacterSelectorLoading] = useState(false);
+  const [modelSelector, setModelSelector] = useState<WebModelSelectorState | null>(null);
+  const [modelSelectorLoading, setModelSelectorLoading] = useState(false);
   const [chats, setChats] = useState<WebChatSummary[]>([]);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<WebChatMessage[]>([]);
@@ -299,6 +312,24 @@ export function useChatViewModel(): ChatViewModel {
     }
   }
 
+  async function refreshModelSelector(currentToken: string) {
+    setModelSelectorLoading(true);
+    try {
+      const selectorData = await getModelSelector(currentToken);
+      setModelSelector(selectorData);
+      return selectorData;
+    } finally {
+      setModelSelectorLoading(false);
+    }
+  }
+
+  async function refreshChats(currentToken: string) {
+    const chatList = await listChats(currentToken);
+    setChats(chatList);
+    setHistoryLoaded(true);
+    return chatList;
+  }
+
   async function ensureChatsLoaded(currentToken: string, force = false) {
     if (historyLoading || (!force && historyLoaded)) {
       return;
@@ -306,9 +337,7 @@ export function useChatViewModel(): ChatViewModel {
 
     setHistoryLoading(true);
     try {
-      const chatList = await listChats(currentToken);
-      setChats(chatList);
-      setHistoryLoaded(true);
+      await refreshChats(currentToken);
     } finally {
       setHistoryLoading(false);
     }
@@ -319,12 +348,14 @@ export function useChatViewModel(): ChatViewModel {
     setInputProcessingStage('connecting');
 
     try {
-      const [bootData, selectorData] = await Promise.all([
+      const [bootData, selectorData, modelSelectorData] = await Promise.all([
         bootstrap(currentToken),
-        getCharacterSelector(currentToken)
+        getCharacterSelector(currentToken),
+        getModelSelector(currentToken)
       ]);
       setBoot(bootData);
       setCharacterSelector(selectorData);
+      setModelSelector(modelSelectorData);
       const nextChatId = preferredChatId ?? bootData.current_chat_id ?? null;
       setSelectedChatId(nextChatId);
       if (!nextChatId) {
@@ -351,13 +382,15 @@ export function useChatViewModel(): ChatViewModel {
       if (mode === 'replace') {
         await selectChatOnServer(currentToken, chatId);
       }
-      const [themeData, messagePage, selectorData] = await Promise.all([
+      const [themeData, messagePage, selectorData, modelSelectorData] = await Promise.all([
         getTheme(currentToken, chatId),
         getMessages(currentToken, chatId, { limit: INITIAL_MESSAGES_PAGE_SIZE }),
-        getCharacterSelector(currentToken)
+        getCharacterSelector(currentToken),
+        getModelSelector(currentToken)
       ]);
       setTheme(themeData);
       setCharacterSelector(selectorData);
+      setModelSelector(modelSelectorData);
       setMessages((currentMessages) =>
         mode === 'merge-latest'
           ? mergeLatestConversationPage(currentMessages, messagePage.messages)
@@ -378,6 +411,8 @@ export function useChatViewModel(): ChatViewModel {
       setCharacterSelector(null);
       setCharacterSelectorOpenState(false);
       setCharacterSelectorLoading(false);
+      setModelSelector(null);
+      setModelSelectorLoading(false);
       setChats([]);
       setSelectedChatId(null);
       setMessages([]);
@@ -612,8 +647,17 @@ export function useChatViewModel(): ChatViewModel {
     try {
       const updated = await renameChat(token, chat.id, nextTitle);
       setChats((currentChats) =>
-        currentChats.map((item) => (item.id === updated.id ? updated : item))
+        currentChats.map((item) =>
+          item.id === updated.id
+            ? {
+                ...item,
+                ...updated,
+                title: nextTitle
+              }
+            : item
+        )
       );
+      await refreshChats(token);
     } catch (actionError: unknown) {
       handleApiFailure(actionError);
     }
@@ -626,11 +670,13 @@ export function useChatViewModel(): ChatViewModel {
 
     try {
       await deleteChat(token, chat.id);
-      const nextChats = await listChats(token);
-      setChats(nextChats);
-      setHistoryLoaded(true);
+      setChats((currentChats) => currentChats.filter((item) => item.id !== chat.id));
+      const nextChats = await refreshChats(token);
       const fallbackId = nextChats[0]?.id ?? null;
-      if (selectedChatId === chat.id) {
+      const hasSelectedChat = selectedChatId
+        ? nextChats.some((item) => item.id === selectedChatId)
+        : false;
+      if (selectedChatId === chat.id || !hasSelectedChat) {
         setMessages([]);
         setTheme(null);
         setHasMoreHistoryBefore(false);
@@ -736,10 +782,16 @@ export function useChatViewModel(): ChatViewModel {
     try {
       const selectorData = await setActivePromptOnServer(token, target);
       setCharacterSelector(selectorData);
+      const requests: Array<Promise<unknown>> = [refreshModelSelector(token)];
       if (selectedChatId) {
-        const themeData = await getTheme(token, selectedChatId);
-        setTheme(themeData);
+        requests.push(
+          getTheme(token, selectedChatId).then((themeData) => {
+            setTheme(themeData);
+            return null;
+          })
+        );
       }
+      await Promise.all(requests);
       setCharacterSelectorOpenState(false);
       setError(null);
     } catch (actionError: unknown) {
@@ -816,6 +868,33 @@ export function useChatViewModel(): ChatViewModel {
     return buildContextStats(messages, messageInput);
   }, [messageInput, messages]);
 
+  async function selectModelConfig(
+    configId: string,
+    modelIndex: number,
+    confirmCharacterCardSwitch = false
+  ) {
+    if (!token) {
+      return null;
+    }
+
+    setModelSelectorLoading(true);
+    try {
+      const response = await selectModelOnServer(token, {
+        config_id: configId,
+        model_index: modelIndex,
+        confirm_character_card_switch: confirmCharacterCardSwitch
+      });
+      setModelSelector(response.selector);
+      setError(null);
+      return response;
+    } catch (actionError: unknown) {
+      handleApiFailure(actionError);
+      return null;
+    } finally {
+      setModelSelectorLoading(false);
+    }
+  }
+
   return {
     token,
     tokenDraft,
@@ -824,6 +903,8 @@ export function useChatViewModel(): ChatViewModel {
     characterSelector,
     characterSelectorOpen,
     characterSelectorLoading,
+    modelSelector,
+    modelSelectorLoading,
     chats,
     visibleChats,
     selectedChatId,
@@ -867,6 +948,7 @@ export function useChatViewModel(): ChatViewModel {
     setHistoryOpen,
     setCharacterSelectorOpen,
     switchActivePrompt,
+    selectModelConfig,
     loadOlderMessages,
     setAttachmentPanelOpen,
     queueDraftMessage,

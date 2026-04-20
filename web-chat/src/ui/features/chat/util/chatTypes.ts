@@ -249,6 +249,32 @@ export interface WebCharacterSelectorResponse {
   groups: WebCharacterGroupSelectorItem[];
 }
 
+export interface WebModelSelectorConfig {
+  id: string;
+  name: string;
+  model_name: string;
+  models: string[];
+  selected: boolean;
+  selected_model_index?: number | null;
+}
+
+export interface WebModelSelectorState {
+  current_config_id: string;
+  current_config_name?: string | null;
+  current_model_index: number;
+  current_model_name: string;
+  locked_by_character_card: boolean;
+  locked_character_card_id?: string | null;
+  locked_character_card_name?: string | null;
+  configs: WebModelSelectorConfig[];
+}
+
+export interface WebSelectModelResponse {
+  success: boolean;
+  requires_character_card_switch_confirmation: boolean;
+  selector: WebModelSelectorState;
+}
+
 export interface WebChatStreamEvent {
   event: 'start' | 'user_message' | 'assistant_delta' | 'assistant_done' | 'error';
   chat_id: string;

@@ -4753,6 +4753,10 @@
     <string name="chat_message_locator_title">Jump to Message</string>
     <string name="chat_message_locator_current">Current position: %1$d / %2$d</string>
     <string name="chat_message_locator_hint">Tap any message to jump there quickly</string>
+    <string name="chat_message_locator_search_label">Search Messages</string>
+    <string name="chat_message_locator_search_placeholder">Enter a keyword from the message</string>
+    <string name="chat_message_locator_search_results">Found %1$d results. Tap one to jump.</string>
+    <string name="chat_message_locator_search_empty">No matching messages found</string>
     <string name="chat_sender_user">User</string>
     <string name="chat_sender_ai">AI</string>
     <string name="chat_sender_summary">Summary</string>
@@ -4776,6 +4780,8 @@
     <string name="history_filter_current_card_desc">Only show folders and conversations under the current character card</string>
     <string name="history_auto_switch_character">Auto Switch Character Card</string>
     <string name="history_auto_switch_character_desc">Automatically match bound character card when switching conversations</string>
+    <string name="history_auto_switch_chat">Auto Switch Chat</string>
+    <string name="history_auto_switch_chat_desc">Switch to the latest conversation for the selected character card or group, or create one if none exists</string>
     <string name="voice_input">Voice Input</string>
     <string name="insert_attachment">Insert Attachment</string>
     <string name="remove_attachment">Remove Attachment</string>

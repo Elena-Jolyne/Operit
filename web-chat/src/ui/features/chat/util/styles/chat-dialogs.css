@@ -141,6 +141,17 @@
   gap: 14px;
 }
 
+.model-selector-confirm-dialog,
+.model-selector-info-dialog {
+  width: min(100%, 420px);
+}
+
+.model-selector-confirm-dialog header p,
+.model-selector-info-dialog header p {
+  margin: 0;
+  line-height: 1.6;
+}
+
 .configuration-screen-header {
   display: flex;
   flex-direction: column;
